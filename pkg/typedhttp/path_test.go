@@ -1,6 +1,7 @@
 package typedhttp_test
 
 import (
+	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
@@ -19,7 +20,7 @@ type TestPathRequest struct {
 func TestPathDecoder_Success(t *testing.T) {
 	decoder := typedhttp.NewPathDecoder[TestPathRequest](validator.New())
 
-	req := httptest.NewRequest("GET", "/users/123", nil)
+	req := httptest.NewRequest(http.MethodGet, "/users/123", http.NoBody)
 
 	result, err := decoder.Decode(req)
 
@@ -31,7 +32,7 @@ func TestPathDecoder_ValidationError(t *testing.T) {
 	decoder := typedhttp.NewPathDecoder[TestPathRequest](validator.New())
 
 	// Test with empty path - this should result in validation error since ID is required
-	req := httptest.NewRequest("GET", "/", nil)
+	req := httptest.NewRequest(http.MethodGet, "/", http.NoBody)
 
 	result, err := decoder.Decode(req)
 
@@ -56,7 +57,7 @@ func TestPathDecoder_ContentTypes(t *testing.T) {
 func TestCombinedDecoder_PathAndQuery(t *testing.T) {
 	decoder := typedhttp.NewCombinedDecoder[TestPathRequest](nil) // No validation for this test
 
-	req := httptest.NewRequest("GET", "/users/123?name=john", nil)
+	req := httptest.NewRequest(http.MethodGet, "/users/123?name=john", http.NoBody)
 
 	result, err := decoder.Decode(req)
 
@@ -80,7 +81,7 @@ func TestCombinedDecoder_JSON(t *testing.T) {
 	decoder := typedhttp.NewCombinedDecoder[TestJSONRequest](validator.New())
 
 	jsonBody := `{"name":"Jane","email":"jane@example.com"}`
-	req := httptest.NewRequest("POST", "/users", strings.NewReader(jsonBody))
+	req := httptest.NewRequest(http.MethodPost, "/users", strings.NewReader(jsonBody))
 	req.Header.Set("Content-Type", "application/json")
 
 	result, err := decoder.Decode(req)

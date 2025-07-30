@@ -26,14 +26,14 @@ func TestIntegration_RealServer(t *testing.T) {
 		defer resp.Body.Close()
 
 		assert.Equal(t, http.StatusOK, resp.StatusCode)
-		
+
 		body, err := io.ReadAll(resp.Body)
 		require.NoError(t, err)
-		
+
 		var userResp GetUserResponse
 		err = json.Unmarshal(body, &userResp)
 		require.NoError(t, err)
-		
+
 		assert.Equal(t, "123", userResp.ID)
 		assert.Equal(t, "John Doe", userResp.Name)
 		assert.Equal(t, "john@example.com", userResp.Email)
@@ -45,10 +45,10 @@ func TestIntegration_RealServer(t *testing.T) {
 			Name:  "Integration Test User",
 			Email: "integration@test.com",
 		}
-		
+
 		jsonBody, err := json.Marshal(createReq)
 		require.NoError(t, err)
-		
+
 		resp, err := http.Post(
 			server.URL+"/users",
 			"application/json",
@@ -56,16 +56,16 @@ func TestIntegration_RealServer(t *testing.T) {
 		)
 		require.NoError(t, err)
 		defer resp.Body.Close()
-		
+
 		assert.Equal(t, http.StatusCreated, resp.StatusCode)
-		
+
 		body, err := io.ReadAll(resp.Body)
 		require.NoError(t, err)
-		
+
 		var createResp CreateUserResponse
 		err = json.Unmarshal(body, &createResp)
 		require.NoError(t, err)
-		
+
 		assert.Equal(t, "user_12345", createResp.ID)
 		assert.Equal(t, "Integration Test User", createResp.Name)
 		assert.Equal(t, "integration@test.com", createResp.Email)
@@ -79,12 +79,12 @@ func TestIntegration_RealServer(t *testing.T) {
 		defer resp.Body.Close()
 
 		assert.Equal(t, http.StatusNotFound, resp.StatusCode)
-		
+
 		body, err := io.ReadAll(resp.Body)
 		require.NoError(t, err)
-		
+
 		t.Logf("Error response: %s", string(body))
-		
+
 		// Just verify it's a valid JSON error response
 		var errorMap map[string]interface{}
 		err = json.Unmarshal(body, &errorMap)

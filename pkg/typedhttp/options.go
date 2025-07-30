@@ -29,9 +29,9 @@ func WithMiddleware(middleware ...Middleware) HandlerOption {
 }
 
 // WithOpenAPI sets OpenAPI metadata for the handler.
-func WithOpenAPI(metadata OpenAPIMetadata) HandlerOption {
+func WithOpenAPI(metadata *OpenAPIMetadata) HandlerOption {
 	return func(cfg *HandlerConfig) {
-		cfg.Metadata = metadata
+		cfg.Metadata = *metadata
 	}
 }
 

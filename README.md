@@ -1,12 +1,12 @@
 # TypedHTTP
 
-> Type-safe HTTP handlers for Go with multi-source request data extraction
+> Type-safe HTTP handlers for Go with multi-source request data extraction and automatic OpenAPI generation
 
 [![Go Reference](https://pkg.go.dev/badge/github.com/pavelpascari/typedhttp.svg)](https://pkg.go.dev/github.com/pavelpascari/typedhttp)
 [![Go Report Card](https://goreportcard.com/badge/github.com/pavelpascari/typedhttp)](https://goreportcard.com/report/github.com/pavelpascari/typedhttp)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
-TypedHTTP is a powerful Go library that brings type safety and declarative request handling to HTTP APIs. Extract data from multiple HTTP sources (path, query, headers, cookies, forms, JSON) with configurable precedence rules, transformations, and validation.
+TypedHTTP is a powerful Go library that brings type safety and declarative request handling to HTTP APIs. Extract data from multiple HTTP sources (path, query, headers, cookies, forms, JSON) with configurable precedence rules, transformations, validation, and **automatic OpenAPI 3.0+ specification generation**.
 
 ## 🚀 Key Features
 
@@ -16,6 +16,7 @@ TypedHTTP is a powerful Go library that brings type safety and declarative reque
 - **🔄 Transformations**: Built-in data transformations (IP extraction, case conversion, etc.)
 - **✅ Validation**: Seamless integration with `go-playground/validator`
 - **📁 File Uploads**: First-class support for multipart form uploads
+- **📖 OpenAPI Generation**: Automatic OpenAPI 3.0+ specification generation with comment-based documentation
 - **🎨 Clean APIs**: Declarative struct tags for ergonomic request definition
 - **🔧 Extensible**: Custom decoders, encoders, and middleware support
 
@@ -35,6 +36,7 @@ package main
 import (
     "context"
     "net/http"
+
     "github.com/pavelpascari/typedhttp/pkg/typedhttp"
 )
 
@@ -128,6 +130,246 @@ type UserSettings struct {
     Notifications bool   `json:"notifications"`
     Privacy       string `json:"privacy"`
 }
+```
+
+## 📖 Automatic OpenAPI Generation
+
+TypedHTTP automatically generates comprehensive OpenAPI 3.0+ specifications from your typed handlers and request/response types, with zero manual maintenance required.
+
+### Quick Start with OpenAPI
+
+```go
+package main
+
+import (
+    "context"
+    "fmt"
+    "log"
+    "mime/multipart"
+    "net/http"
+    
+    "github.com/pavelpascari/typedhttp/pkg/openapi"
+    "github.com/pavelpascari/typedhttp/pkg/typedhttp"
+)
+
+// Request types with OpenAPI comment documentation
+type GetUserRequest struct {
+    //openapi:description=User unique identifier,example=123e4567-e89b-12d3-a456-426614174000
+    ID string `path:"id" validate:"required,uuid"`
+
+    //openapi:description=Comma-separated list of fields to return,example=id,name,email
+    Fields string `query:"fields" default:"id,name,email"`
+
+    //openapi:description=Authorization bearer token
+    Auth string `header:"Authorization" validate:"required"`
+}
+
+type GetUserResponse struct {
+    //openapi:description=User unique identifier
+    ID string `json:"id" validate:"required,uuid"`
+
+    //openapi:description=User full name
+    Name string `json:"name" validate:"required"`
+
+    //openapi:description=User email address
+    Email string `json:"email,omitempty" validate:"omitempty,email"`
+}
+
+type CreateUserRequest struct {
+    //openapi:description=User full name,example=John Doe
+    Name string `json:"name" validate:"required,min=2,max=50"`
+
+    //openapi:description=User email address,example=john@example.com
+    Email string `json:"email" validate:"required,email"`
+
+    //openapi:description=User profile picture,type=file,format=binary
+    Avatar *multipart.FileHeader `form:"avatar"`
+}
+
+type CreateUserResponse struct {
+    //openapi:description=Created user unique identifier
+    ID string `json:"id" validate:"required,uuid"`
+
+    //openapi:description=User full name
+    Name string `json:"name"`
+
+    //openapi:description=User email address
+    Email string `json:"email"`
+
+    //openapi:description=Creation timestamp
+    CreatedAt string `json:"created_at"`
+}
+
+// Handlers
+type GetUserHandler struct{}
+
+func (h *GetUserHandler) Handle(ctx context.Context, req GetUserRequest) (GetUserResponse, error) {
+    return GetUserResponse{
+        ID:    req.ID,
+        Name:  "John Doe",
+        Email: "john@example.com",
+    }, nil
+}
+
+type CreateUserHandler struct{}
+
+func (h *CreateUserHandler) Handle(ctx context.Context, req CreateUserRequest) (CreateUserResponse, error) {
+    return CreateUserResponse{
+        ID:        "123e4567-e89b-12d3-a456-426614174000",
+        Name:      req.Name,
+        Email:     req.Email,
+        CreatedAt: "2025-01-30T12:00:00Z",
+    }, nil
+}
+
+func main() {
+    // Create router and register handlers
+    router := typedhttp.NewRouter()
+    typedhttp.GET(router, "/users/{id}", &GetUserHandler{})
+    typedhttp.POST(router, "/users", &CreateUserHandler{})
+
+    // Create OpenAPI generator
+    generator := openapi.NewGenerator(openapi.Config{
+        Info: openapi.Info{
+            Title:       "User Management API",
+            Version:     "1.0.0",
+            Description: "A simple API for managing users with automatic OpenAPI generation",
+        },
+        Servers: []openapi.Server{
+            {URL: "http://localhost:8080", Description: "Development server"},
+        },
+    })
+
+    // Generate OpenAPI specification
+    spec, err := generator.Generate(router)
+    if err != nil {
+        log.Fatalf("Failed to generate OpenAPI spec: %v", err)
+    }
+
+    // Generate JSON and YAML output
+    jsonData, _ := generator.GenerateJSON(spec)
+    yamlData, _ := generator.GenerateYAML(spec)
+
+    fmt.Printf("Generated OpenAPI spec with %d paths\n", len(spec.Paths.Map()))
+
+    // Serve OpenAPI documentation endpoints
+    http.Handle("/openapi.json", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+        w.Header().Set("Content-Type", "application/json")
+        w.Write(jsonData)
+    }))
+
+    http.Handle("/openapi.yaml", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+        w.Header().Set("Content-Type", "application/x-yaml")
+        w.Write(yamlData)
+    }))
+
+    // Serve the API
+    http.Handle("/", router)
+    log.Println("Server starting on :8080")
+    log.Println("OpenAPI JSON: http://localhost:8080/openapi.json")
+    log.Println("OpenAPI YAML: http://localhost:8080/openapi.yaml")
+    
+    http.ListenAndServe(":8080", nil)
+}
+```
+
+### Comment-Based Documentation
+
+TypedHTTP uses clean comment-based documentation instead of verbose struct tags:
+
+```go
+type APIRequest struct {
+    // ✅ Clean separation of concerns
+    //openapi:description=User unique identifier,example=123e4567-e89b-12d3-a456-426614174000
+    UserID string `path:"id" validate:"required,uuid"`
+    
+    //openapi:description=Search query,example=john doe
+    Query string `query:"q" validate:"required,min=1"`
+    
+    //openapi:description=Results per page,example=20
+    Limit int `query:"limit" default:"10" validate:"min=1,max=100"`
+    
+    //openapi:description=File to upload,type=file,format=binary
+    Document *multipart.FileHeader `form:"document"`
+    
+    //openapi:description=Complex metadata object
+    Metadata map[string]interface{} `json:"metadata"`
+}
+```
+
+### Automatic Feature Detection
+
+The OpenAPI generator automatically detects and documents:
+
+- **Parameters**: Extracts from `path:`, `query:`, `header:`, `cookie:` tags
+- **Request Bodies**: Detects JSON (`json:` tags) and multipart forms (`form:` tags)
+- **File Uploads**: Automatically handles `*multipart.FileHeader` fields
+- **Validation Rules**: Converts validation tags to OpenAPI schema constraints
+- **Default Values**: Uses `default:` tag values as OpenAPI defaults
+- **Multi-Source Fields**: Documents precedence rules for fields with multiple sources
+
+### Advanced OpenAPI Configuration
+
+```go
+// Configure comprehensive API documentation
+generator := openapi.NewGenerator(openapi.Config{
+    Info: openapi.Info{
+        Title:          "Advanced API",
+        Version:        "2.1.0",
+        Description:    "Comprehensive API with full documentation",
+        TermsOfService: "https://example.com/terms",
+        Contact: &openapi.Contact{
+            Name:  "API Support",
+            URL:   "https://example.com/support",
+            Email: "support@example.com",
+        },
+        License: &openapi.License{
+            Name: "MIT",
+            URL:  "https://opensource.org/licenses/MIT",
+        },
+    },
+    Servers: []openapi.Server{
+        {URL: "https://api.example.com/v2", Description: "Production"},
+        {URL: "https://staging.example.com/v2", Description: "Staging"},
+    },
+})
+
+spec, err := generator.Generate(router)
+if err != nil {
+    log.Fatal(err)
+}
+
+// Multiple output formats
+http.Handle("/openapi.json", openapi.JSONHandler(spec))
+http.Handle("/openapi.yaml", openapi.YAMLHandler(spec))
+```
+
+### Generated OpenAPI Features
+
+The generated specifications include:
+
+- **Complete Parameter Documentation**: All path, query, header, and cookie parameters
+- **Request/Response Schemas**: Full JSON schemas with validation rules
+- **File Upload Support**: Proper `multipart/form-data` documentation
+- **Multi-Source Documentation**: Precedence rules documented in parameter descriptions
+- **Validation Constraints**: Min/max values, string formats, required fields
+- **Example Values**: From `example=` in comments and `default=` in tags
+- **Nested Objects**: Complex request/response structures
+- **Array Support**: Both simple arrays and arrays of objects
+
+### Integration with Documentation Tools
+
+The generated OpenAPI specifications work seamlessly with popular documentation tools:
+
+```bash
+# View with Swagger UI
+curl http://localhost:8080/openapi.json | swagger-ui-serve
+
+# Generate client code
+openapi-generator generate -i http://localhost:8080/openapi.json -g go -o ./client
+
+# API testing with Postman
+# Import http://localhost:8080/openapi.json into Postman
 ```
 
 ## 📋 Supported Data Sources
@@ -381,9 +623,10 @@ TypedHTTP follows hexagonal architecture principles:
 
 ## 📚 Documentation
 
-- [Architecture Decision Records (ADRs)](docs/adrs/)
-- [API Reference](https://pkg.go.dev/github.com/pavelpascari/typedhttp)
-- [Examples](examples/)
+- [Architecture Decision Records (ADRs)](docs/adrs/) - Design decisions and implementation details
+- [OpenAPI Generator Guide](docs/adrs/ADR-003-automatic-openapi-generation.md) - Complete OpenAPI generation documentation
+- [API Reference](https://pkg.go.dev/github.com/pavelpascari/typedhttp) - Full API documentation
+- [Examples](examples/) - Working examples including OpenAPI generation
 
 ## 🤝 Contributing
 

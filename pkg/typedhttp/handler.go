@@ -65,7 +65,7 @@ type OpenAPIMetadata struct {
 	Description string                  `json:"description,omitempty"`
 	Tags        []string                `json:"tags,omitempty"`
 	Parameters  []ParameterSpec         `json:"parameters,omitempty"`
-	RequestBody *RequestBodySpec        `json:"requestBody,omitempty"`
+	RequestBody *RequestBodySpec        `json:"request_body,omitempty"`
 	Responses   map[string]ResponseSpec `json:"responses,omitempty"`
 }
 

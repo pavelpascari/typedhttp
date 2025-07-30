@@ -56,6 +56,7 @@ func (h *HTTPHandler[TRequest, TResponse]) ServeHTTP(w http.ResponseWriter, r *h
 
 		if err != nil {
 			h.handleError(w, err)
+
 			return
 		}
 
@@ -63,12 +64,13 @@ func (h *HTTPHandler[TRequest, TResponse]) ServeHTTP(w http.ResponseWriter, r *h
 		resp, err = h.handler.Handle(r.Context(), req)
 		if err != nil {
 			h.handleError(w, err)
+
 			return
 		}
 
 		// Encode response
 		statusCode := http.StatusOK
-		if r.Method == "POST" {
+		if r.Method == http.MethodPost {
 			statusCode = http.StatusCreated
 		}
 
@@ -82,6 +84,7 @@ func (h *HTTPHandler[TRequest, TResponse]) ServeHTTP(w http.ResponseWriter, r *h
 
 		if err != nil {
 			h.handleError(w, err)
+
 			return
 		}
 	})
@@ -95,7 +98,7 @@ func (h *HTTPHandler[TRequest, TResponse]) ServeHTTP(w http.ResponseWriter, r *h
 	finalHandler.ServeHTTP(w, r)
 }
 
-// handleError handles errors using the configured error mapper
+// handleError handles errors using the configured error mapper.
 func (h *HTTPHandler[TRequest, TResponse]) handleError(w http.ResponseWriter, err error) {
 	var statusCode int
 	var response interface{}
@@ -111,7 +114,7 @@ func (h *HTTPHandler[TRequest, TResponse]) handleError(w http.ResponseWriter, er
 	// Encode error response (this will set content-type and status code)
 	encoder := NewJSONEncoder[interface{}]()
 	if encodeErr := encoder.Encode(w, response, statusCode); encodeErr != nil {
-		// Fallback to simple error message
+		// Fallback to a simple error message
 		http.Error(w, "Internal server error", http.StatusInternalServerError)
 	}
 }
@@ -145,7 +148,7 @@ func (r *TypedRouter) registerHandler(
 	method, path string,
 	httpHandler http.Handler,
 	requestType, responseType reflect.Type,
-	metadata OpenAPIMetadata,
+	metadata *OpenAPIMetadata,
 ) {
 	// Store registration metadata
 	registration := HandlerRegistration{
@@ -153,7 +156,7 @@ func (r *TypedRouter) registerHandler(
 		Path:         path,
 		RequestType:  requestType,
 		ResponseType: responseType,
-		Metadata:     metadata,
+		Metadata:     *metadata,
 	}
 
 	r.handlers = append(r.handlers, registration)
@@ -182,11 +185,12 @@ func RegisterHandler[TReq, TResp any](
 		httpHandler,
 		reflect.TypeOf((*TReq)(nil)).Elem(),
 		reflect.TypeOf((*TResp)(nil)).Elem(),
-		httpHandler.metadata,
+		&httpHandler.metadata,
 	)
 }
 
-// Convenience functions for common HTTP verbs
+// Convenience functions for common HTTP verbs.
+
 func GET[TReq, TResp any](router *TypedRouter, path string, handler Handler[TReq, TResp], opts ...HandlerOption) {
 	RegisterHandler(router, "GET", path, handler, opts...)
 }

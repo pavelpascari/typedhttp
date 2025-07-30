@@ -2,6 +2,7 @@ package typedhttp
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"reflect"
@@ -9,6 +10,15 @@ import (
 	"strings"
 
 	"github.com/go-playground/validator/v10"
+)
+
+// Error variables for static error handling.
+var (
+	ErrInvalidIntegerValue  = errors.New("invalid integer value")
+	ErrInvalidUintegerValue = errors.New("invalid unsigned integer value")
+	ErrInvalidFloatValue    = errors.New("invalid float value")
+	ErrInvalidBooleanValue  = errors.New("invalid boolean value")
+	ErrUnsupportedFieldType = errors.New("unsupported field type")
 )
 
 // JSONDecoder implements RequestDecoder for JSON content.
@@ -36,12 +46,14 @@ func (d *JSONDecoder[T]) Decode(r *http.Request) (T, error) {
 		if err := d.validator.Struct(result); err != nil {
 			// Convert validator errors to ValidationError
 			validationErrors := make(map[string]string)
-			if validatorErrs, ok := err.(validator.ValidationErrors); ok {
+			var validatorErrs validator.ValidationErrors
+			if errors.As(err, &validatorErrs) {
 				for _, validatorErr := range validatorErrs {
 					field := strings.ToLower(validatorErr.Field())
 					validationErrors[field] = validatorErr.Tag()
 				}
 			}
+
 			return result, NewValidationError("Validation failed", validationErrors)
 		}
 	}
@@ -110,12 +122,14 @@ func (d *QueryDecoder[T]) Decode(r *http.Request) (T, error) {
 	if d.validator != nil {
 		if err := d.validator.Struct(result); err != nil {
 			validationErrors := make(map[string]string)
-			if validatorErrs, ok := err.(validator.ValidationErrors); ok {
+			var validatorErrs validator.ValidationErrors
+			if errors.As(err, &validatorErrs) {
 				for _, validatorErr := range validatorErrs {
 					field := strings.ToLower(validatorErr.Field())
 					validationErrors[field] = validatorErr.Tag()
 				}
 			}
+
 			return result, NewValidationError("Validation failed", validationErrors)
 		}
 	}
@@ -130,36 +144,43 @@ func (d *QueryDecoder[T]) ContentTypes() []string {
 
 // setFieldValue sets a reflect.Value based on a string value.
 func setFieldValue(fieldValue reflect.Value, value string) error {
+	//nolint:dupl // This switch is reused in other files for consistent type conversion
 	switch fieldValue.Kind() {
 	case reflect.String:
 		fieldValue.SetString(value)
 	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
 		intValue, err := strconv.ParseInt(value, 10, 64)
 		if err != nil {
-			return fmt.Errorf("invalid integer value: %s", value)
+			return fmt.Errorf("%w: %s", ErrInvalidIntegerValue, value)
 		}
 		fieldValue.SetInt(intValue)
 	case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64:
 		uintValue, err := strconv.ParseUint(value, 10, 64)
 		if err != nil {
-			return fmt.Errorf("invalid unsigned integer value: %s", value)
+			return fmt.Errorf("%w: %s", ErrInvalidUintegerValue, value)
 		}
 		fieldValue.SetUint(uintValue)
 	case reflect.Float32, reflect.Float64:
 		floatValue, err := strconv.ParseFloat(value, 64)
 		if err != nil {
-			return fmt.Errorf("invalid float value: %s", value)
+			return fmt.Errorf("%w: %s", ErrInvalidFloatValue, value)
 		}
 		fieldValue.SetFloat(floatValue)
 	case reflect.Bool:
 		boolValue, err := strconv.ParseBool(value)
 		if err != nil {
-			return fmt.Errorf("invalid boolean value: %s", value)
+			return fmt.Errorf("%w: %s", ErrInvalidBooleanValue, value)
 		}
 		fieldValue.SetBool(boolValue)
+	case reflect.Invalid, reflect.Uintptr, reflect.Complex64, reflect.Complex128,
+		reflect.Array, reflect.Chan, reflect.Func, reflect.Interface, reflect.Map,
+		reflect.Ptr, reflect.Slice, reflect.Struct, reflect.UnsafePointer:
+		// Unsupported field types for string parsing
+		return fmt.Errorf("%w: %s", ErrUnsupportedFieldType, fieldValue.Kind())
 	default:
-		return fmt.Errorf("unsupported field type: %s", fieldValue.Kind())
+		return fmt.Errorf("%w: %s", ErrUnsupportedFieldType, fieldValue.Kind())
 	}
+
 	return nil
 }
 
@@ -176,7 +197,11 @@ func (e *JSONEncoder[T]) Encode(w http.ResponseWriter, data T, statusCode int) e
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(statusCode)
 
-	return json.NewEncoder(w).Encode(data)
+	if err := json.NewEncoder(w).Encode(data); err != nil {
+		return fmt.Errorf("failed to encode JSON response: %w", err)
+	}
+
+	return nil
 }
 
 // ContentType returns the content type for JSON encoding.
@@ -214,7 +239,11 @@ func (e *EnvelopeEncoder[T]) Encode(w http.ResponseWriter, data T, statusCode in
 		envelope.RequestID = requestID
 	}
 
-	return e.encoder.Encode(w, envelope, statusCode)
+	if err := e.encoder.Encode(w, envelope, statusCode); err != nil {
+		return fmt.Errorf("failed to encode envelope response: %w", err)
+	}
+
+	return nil
 }
 
 // ContentType returns the content type of the underlying encoder.

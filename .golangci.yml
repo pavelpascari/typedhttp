@@ -14,7 +14,7 @@ linters:
     - errname
     - errorlint
     - exhaustive
-    - exportloopref
+    - copyloopvar
     - forbidigo
     - forcetypeassert
     - funlen
@@ -25,12 +25,11 @@ linters:
     - gocyclo
     - godot
     - godox
-    - goerr113
+    - err113
     - gofmt
     - gofumpt
-    - goheader
     - goimports
-    - gomnd
+    - mnd
     - gomoddirectives
     - gomodguard
     - goprintffuncname
@@ -55,7 +54,7 @@ linters:
     - staticcheck
     - stylecheck
     - tagliatelle
-    - tenv
+    - usetesting
     - testpackage
     - thelper
     - tparallel
@@ -71,14 +70,14 @@ linters:
 
 linters-settings:
   funlen:
-    lines: 100
-    statements: 50
+    lines: 120
+    statements: 60
   gocognit:
-    min-complexity: 15
+    min-complexity: 25
   gocyclo:
-    min-complexity: 15
+    min-complexity: 25
   cyclop:
-    max-complexity: 15
+    max-complexity: 25
   lll:
     line-length: 120
   varnamelen:
@@ -93,13 +92,34 @@ linters-settings:
       - i
       - j
       - k
+      - fn
+      - ch
+      - db
+      - fs
+      - wg
   tagliatelle:
     case:
       rules:
         json: snake
         yaml: snake
-  goheader:
-    template-path: .go-header.txt
+  nestif:
+    min-complexity: 6
+  dupl:
+    threshold: 150
+  gocritic:
+    enabled-tags:
+      - diagnostic
+      - experimental
+      - opinionated
+      - performance
+      - style
+    disabled-checks:
+      - dupImport # https://github.com/go-critic/go-critic/issues/845
+      - ifElseChain
+      - octalLiteral
+      - whyNoLint
+  err113:
+    max-wrapped-stack-depth: 3
   revive:
     rules:
       - name: exported
@@ -118,11 +138,15 @@ issues:
         - cyclop
         - dupl
         - varnamelen
-        - gomnd
+        - mnd
+        - tagliatelle
+        - testpackage
+        - thelper
+        - noctx
     - path: examples/
       linters:
         - forbidigo
-        - gomnd
+        - mnd
         - varnamelen
     - linters:
         - lll

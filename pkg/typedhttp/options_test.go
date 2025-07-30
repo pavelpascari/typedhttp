@@ -59,7 +59,7 @@ func TestWithOpenAPI(t *testing.T) {
 
 	config := &typedhttp.HandlerConfig{}
 
-	option := typedhttp.WithOpenAPI(metadata)
+	option := typedhttp.WithOpenAPI(&metadata)
 	option(config)
 
 	assert.Equal(t, metadata, config.Metadata)

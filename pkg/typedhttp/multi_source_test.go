@@ -2,6 +2,8 @@ package typedhttp
 
 import (
 	"bytes"
+	"context"
+	"errors"
 	"mime/multipart"
 	"net"
 	"net/http"
@@ -16,7 +18,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// Test struct for multi-source extraction
+// Test struct for multi-source extraction.
 type MultiSourceRequest struct {
 	// Single source fields
 	ID       string `path:"id"`
@@ -44,12 +46,12 @@ type MultiSourceRequest struct {
 	Avatar *multipart.FileHeader `form:"avatar"`
 }
 
-// Simpler test struct for validation tests
+// Simpler test struct for validation tests.
 type ValidationTestRequest struct {
 	UserID string `header:"X-User-ID" validate:"required"`
 }
 
-// Simple test struct without validation for basic tests
+// Simple test struct without validation for basic tests.
 type SimpleTestRequest struct {
 	Auth     string `header:"Authorization"`
 	UserID   string `header:"X-User-ID" cookie:"user_id" precedence:"header,cookie"`
@@ -63,7 +65,7 @@ func TestHeaderDecoder_Success(t *testing.T) {
 	validator := validator.New()
 	decoder := NewHeaderDecoder[SimpleTestRequest](validator)
 
-	req, _ := http.NewRequest("GET", "/test", nil)
+	req, _ := http.NewRequestWithContext(context.Background(), http.MethodGet, "/test", http.NoBody)
 	req.Header.Set("Authorization", "Bearer token123")
 	req.Header.Set("X-User-ID", "user456")
 	req.Header.Set("X-Forwarded-For", "192.168.1.100, 10.0.0.1")
@@ -82,7 +84,7 @@ func TestCookieDecoder_Success(t *testing.T) {
 	validator := validator.New()
 	decoder := NewCookieDecoder[SimpleTestRequest](validator)
 
-	req, _ := http.NewRequest("GET", "/test", nil)
+	req, _ := http.NewRequestWithContext(context.Background(), http.MethodGet, "/test", http.NoBody)
 	req.AddCookie(&http.Cookie{Name: "session", Value: "sess789"})
 	req.AddCookie(&http.Cookie{Name: "user_id", Value: "cookie_user"})
 
@@ -101,7 +103,7 @@ func TestFormDecoder_Success(t *testing.T) {
 	form := url.Values{}
 	form.Add("content", "test content")
 
-	req, _ := http.NewRequest("POST", "/test", strings.NewReader(form.Encode()))
+	req, _ := http.NewRequestWithContext(context.Background(), http.MethodPost, "/test", strings.NewReader(form.Encode()))
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 
 	result, err := decoder.Decode(req)
@@ -110,25 +112,31 @@ func TestFormDecoder_Success(t *testing.T) {
 	assert.Equal(t, "test content", result.Content)
 }
 
+// Test struct specifically for form decoder testing.
+type FormTestRequest struct {
+	Content string                `form:"content"`
+	Avatar  *multipart.FileHeader `form:"avatar"`
+}
+
 func TestFormDecoder_MultipartWithFile(t *testing.T) {
 	validator := validator.New()
-	decoder := NewFormDecoder[MultiSourceRequest](validator)
+	decoder := NewFormDecoder[FormTestRequest](validator)
 
-	// Create multipart form
+	// Create a multipart form.
 	var buf bytes.Buffer
 	writer := multipart.NewWriter(&buf)
 
-	// Add form field
-	writer.WriteField("content", "multipart content")
+	// Add form field.
+	_ = writer.WriteField("content", "multipart content") // ignoring error for test
 
-	// Add file
+	// Add a file.
 	fileWriter, err := writer.CreateFormFile("avatar", "test.jpg")
 	require.NoError(t, err)
-	fileWriter.Write([]byte("fake image data"))
+	_, _ = fileWriter.Write([]byte("fake image data")) // ignoring error for test
 
 	writer.Close()
 
-	req, _ := http.NewRequest("POST", "/test", &buf)
+	req, _ := http.NewRequestWithContext(context.Background(), http.MethodPost, "/test", &buf)
 	req.Header.Set("Content-Type", writer.FormDataContentType())
 
 	result, err := decoder.Decode(req)
@@ -143,10 +151,10 @@ func TestCombinedDecoder_MultiSource(t *testing.T) {
 	validator := validator.New()
 	decoder := NewCombinedDecoder[MultiSourceRequest](validator)
 
-	// Create request with data from multiple sources
-	req, _ := http.NewRequest("GET", "/users/123", nil)
+	// Create request with data from multiple sources.
+	req, _ := http.NewRequestWithContext(context.Background(), http.MethodGet, "/users/123", http.NoBody)
 
-	// Query parameters
+	// Query parameters.
 	q := req.URL.Query()
 	q.Add("name", "John Doe")
 	q.Add("page", "2")
@@ -193,7 +201,7 @@ func TestCombinedDecoder_Precedence(t *testing.T) {
 	validator := validator.New()
 	decoder := NewCombinedDecoder[MultiSourceRequest](validator)
 
-	req, _ := http.NewRequest("GET", "/users/123", nil)
+	req, _ := http.NewRequestWithContext(context.Background(), http.MethodGet, "/users/123", http.NoBody)
 
 	// Add UserID to both header and cookie
 	req.Header.Set("X-User-ID", "from_header")
@@ -219,7 +227,7 @@ func TestCombinedDecoder_Fallback(t *testing.T) {
 	validator := validator.New()
 	decoder := NewCombinedDecoder[MultiSourceRequest](validator)
 
-	req, _ := http.NewRequest("GET", "/users/123", nil)
+	req, _ := http.NewRequestWithContext(context.Background(), http.MethodGet, "/users/123", http.NoBody)
 
 	// Only provide cookie for UserID (header missing)
 	req.AddCookie(&http.Cookie{Name: "user_id", Value: "fallback_cookie"})
@@ -243,7 +251,7 @@ func TestCombinedDecoder_DefaultValues(t *testing.T) {
 	validator := validator.New()
 	decoder := NewCombinedDecoder[MultiSourceRequest](validator)
 
-	req, _ := http.NewRequest("GET", "/users/123", nil)
+	req, _ := http.NewRequestWithContext(context.Background(), http.MethodGet, "/users/123", http.NoBody)
 
 	result, err := decoder.Decode(req)
 	require.NoError(t, err)
@@ -259,14 +267,14 @@ func TestCombinedDecoder_Validation(t *testing.T) {
 	validator := validator.New()
 	decoder := NewCombinedDecoder[ValidationTestRequest](validator)
 
-	req, _ := http.NewRequest("GET", "/users/123", nil)
+	req, _ := http.NewRequestWithContext(context.Background(), http.MethodGet, "/users/123", http.NoBody)
 	// Missing required UserID
 
 	_, err := decoder.Decode(req)
 	require.Error(t, err)
 
-	validationErr, ok := err.(*ValidationError)
-	require.True(t, ok)
+	var validationErr *ValidationError
+	require.True(t, errors.As(err, &validationErr))
 	assert.Contains(t, validationErr.Fields, "userid")
 }
 

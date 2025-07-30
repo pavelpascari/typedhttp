@@ -104,7 +104,7 @@ func determineAuthSource(req EnhancedAPIRequest) string {
 }
 
 func main() {
-	fmt.Println("=== TypedHTTP Enhanced Multi-Source Example ===\n")
+	fmt.Println("=== TypedHTTP Enhanced Multi-Source Example ===")
 
 	// Create router with enhanced decoder
 	router := typedhttp.NewRouter()

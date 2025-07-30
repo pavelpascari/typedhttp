@@ -9,7 +9,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// Test types for handler testing
+// Test types for handler testing.
 type TestRequest struct {
 	Name  string `json:"name" validate:"required"`
 	Email string `json:"email" validate:"required,email"`
@@ -20,7 +20,7 @@ type TestResponse struct {
 	ID      string `json:"id"`
 }
 
-// Simple test handler implementation
+// Simple test handler implementation.
 type TestHandler struct {
 	shouldFail bool
 }
@@ -73,7 +73,7 @@ func TestHandler_ErrorHandling(t *testing.T) {
 	assert.Equal(t, "Test error", valErr.Message)
 }
 
-// Test service interface compatibility
+// Test service interface compatibility.
 type TestService struct{}
 
 func (s *TestService) Execute(ctx context.Context, req TestRequest) (TestResponse, error) {

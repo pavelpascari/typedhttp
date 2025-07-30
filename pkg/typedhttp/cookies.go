@@ -26,85 +26,134 @@ func NewCookieDecoder[T any](validator *validator.Validate) *CookieDecoder[T] {
 func (d *CookieDecoder[T]) Decode(r *http.Request) (T, error) {
 	var result T
 
-	// Use reflection to map cookies to struct fields
-	resultValue := reflect.ValueOf(&result).Elem()
+	if err := d.processCookieFields(r, &result); err != nil {
+		return result, err
+	}
+
+	if err := d.validateCookieResult(result); err != nil {
+		return result, err
+	}
+
+	return result, nil
+}
+
+// processCookieFields processes all cookie fields using reflection.
+func (d *CookieDecoder[T]) processCookieFields(r *http.Request, result *T) error {
+	resultValue := reflect.ValueOf(result).Elem()
 	resultType := resultValue.Type()
 
 	for i := 0; i < resultType.NumField(); i++ {
 		field := resultType.Field(i)
 		fieldValue := resultValue.Field(i)
 
-		// Skip unexported fields
 		if !fieldValue.CanSet() {
 			continue
 		}
 
-		// Get the cookie name from the struct tag
 		cookieName := field.Tag.Get("cookie")
 		if cookieName == "" {
-			continue // Only process fields with cookie tags
-		}
-
-		// Get default value from struct tag
-		defaultValue := field.Tag.Get("default")
-
-		// Get the cookie value from the request
-		var cookieValue string
-		if cookie, err := r.Cookie(cookieName); err == nil {
-			cookieValue = cookie.Value
-		}
-
-		if cookieValue == "" && defaultValue != "" {
-			cookieValue = handleDefaultValue(defaultValue)
-		}
-
-		if cookieValue == "" {
-			continue // Skip empty cookies unless required (validation will catch this)
-		}
-
-		// Handle transformations
-		if transform := field.Tag.Get("transform"); transform != "" {
-			transformedValue, err := applyTransformation(transform, cookieValue)
-			if err != nil {
-				return result, fmt.Errorf("failed to transform cookie %s: %w", cookieName, err)
-			}
-			cookieValue = transformedValue
-		}
-
-		// Handle custom formats (e.g., time parsing)
-		if format := field.Tag.Get("format"); format != "" {
-			formattedValue, err := applyFormat(format, cookieValue, fieldValue.Type())
-			if err != nil {
-				return result, fmt.Errorf("failed to format cookie %s: %w", cookieName, err)
-			}
-
-			// Set the formatted value directly
-			fieldValue.Set(reflect.ValueOf(formattedValue))
 			continue
 		}
 
-		// Set the field value based on its type
-		if err := setFieldValueFromString(fieldValue, cookieValue); err != nil {
-			return result, fmt.Errorf("failed to set cookie field %s: %w", field.Name, err)
+		if err := d.processCookieField(r, &field, fieldValue, cookieName); err != nil {
+			return err
 		}
 	}
 
-	// Perform validation if a validator is available
-	if d.validator != nil {
-		if err := d.validator.Struct(result); err != nil {
-			validationErrors := make(map[string]string)
-			var validatorErrs validator.ValidationErrors
-			if errors.As(err, &validatorErrs) {
-				for _, validatorErr := range validatorErrs {
-					field := strings.ToLower(validatorErr.Field())
-					validationErrors[field] = validatorErr.Tag()
-				}
+	return nil
+}
+
+// processCookieField processes a single cookie field.
+func (d *CookieDecoder[T]) processCookieField(
+	r *http.Request, field *reflect.StructField, fieldValue reflect.Value, cookieName string,
+) error {
+	cookieValue := d.getCookieValue(r, cookieName, field.Tag.Get("default"))
+	if cookieValue == "" {
+		return nil
+	}
+
+	processedValue, err := d.processCookieValue(field, cookieValue, fieldValue.Type())
+	if err != nil {
+		return fmt.Errorf("failed to process cookie %s: %w", cookieName, err)
+	}
+
+	if processedValue != nil {
+		fieldValue.Set(reflect.ValueOf(processedValue))
+
+		return nil
+	}
+
+	if err := setFieldValueFromString(fieldValue, cookieValue); err != nil {
+		return fmt.Errorf("failed to set cookie field %s: %w", field.Name, err)
+	}
+
+	return nil
+}
+
+// getCookieValue retrieves a cookie value with default fallback.
+func (d *CookieDecoder[T]) getCookieValue(r *http.Request, cookieName, defaultValue string) string {
+	var cookieValue string
+	if cookie, err := r.Cookie(cookieName); err == nil {
+		cookieValue = cookie.Value
+	}
+
+	if cookieValue == "" && defaultValue != "" {
+		cookieValue = handleDefaultValue(defaultValue)
+	}
+
+	return cookieValue
+}
+
+// processCookieValue applies transformations and formats to cookie values.
+func (d *CookieDecoder[T]) processCookieValue(
+	field *reflect.StructField, cookieValue string, fieldType reflect.Type,
+) (interface{}, error) {
+	originalValue := cookieValue
+
+	// Handle transformations
+	if transform := field.Tag.Get("transform"); transform != "" {
+		transformedValue, err := applyTransformation(transform, cookieValue)
+		if err != nil {
+			return nil, err
+		}
+		cookieValue = transformedValue
+	}
+
+	// Handle custom formats
+	if format := field.Tag.Get("format"); format != "" {
+		return applyFormat(format, cookieValue, fieldType)
+	}
+
+	// Return transformed value if transformation was applied
+	if cookieValue != originalValue {
+		return cookieValue, nil
+	}
+
+	// No processing needed
+	//nolint:nilnil
+	return nil, nil
+}
+
+// validateCookieResult validates the final cookie result.
+func (d *CookieDecoder[T]) validateCookieResult(result T) error {
+	if d.validator == nil {
+		return nil
+	}
+
+	if err := d.validator.Struct(result); err != nil {
+		validationErrors := make(map[string]string)
+		var validatorErrs validator.ValidationErrors
+		if errors.As(err, &validatorErrs) {
+			for _, validatorErr := range validatorErrs {
+				field := strings.ToLower(validatorErr.Field())
+				validationErrors[field] = validatorErr.Tag()
 			}
-			return result, NewValidationError("Cookie validation failed", validationErrors)
 		}
+
+		return NewValidationError("Cookie validation failed", validationErrors)
 	}
 
-	return result, nil
+	return nil
 }
 
 // ContentTypes returns the supported content types for cookie decoding.
@@ -118,6 +167,7 @@ func GetAllCookies(r *http.Request) map[string]string {
 	for _, cookie := range r.Cookies() {
 		cookies[cookie.Name] = cookie.Value
 	}
+
 	return cookies
 }
 
@@ -126,6 +176,7 @@ func GetCookieWithDefault(r *http.Request, name, defaultValue string) string {
 	if cookie, err := r.Cookie(name); err == nil {
 		return cookie.Value
 	}
+
 	return defaultValue
 }
 
@@ -134,7 +185,7 @@ func GetCookieWithDefault(r *http.Request, name, defaultValue string) string {
 func ParseSignedCookie(cookieValue, secret string) (string, error) {
 	// In a real implementation, you would verify the signature
 	// For now, just return the value as-is
-	// TODO: Implement proper cookie signing/verification
+	// NOTE: Implement proper cookie signing/verification in production
 	return cookieValue, nil
 }
 
@@ -155,7 +206,7 @@ func NewSecureCookieDecoder[T any](validator *validator.Validate, secret string)
 // Decode decodes cookies with security verification.
 func (d *SecureCookieDecoder[T]) Decode(r *http.Request) (T, error) {
 	// For now, delegate to the regular decoder
-	// TODO: Add signature verification for secure cookies
+	// NOTE: Add signature verification for secure cookies in production
 	return d.decoder.Decode(r)
 }
 

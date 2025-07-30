@@ -7,7 +7,7 @@ The below instructions are non-negotiable:
 - we maintain a reasonable test coverage of more than 80%
 - when we work on bugs we start with a test to reproduce the bug - we run the test, and it should fail - then we fix the issue - and the test should then pass
 - use the available make targets to interact with the repo - e.g. to run tests, or build the services
-
+- before you claim you're done with a task - run make test and ensure all tests are passing!!!
 
 ## Context
 

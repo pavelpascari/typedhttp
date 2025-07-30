@@ -1,13 +1,22 @@
 package typedhttp
 
 import (
+	"errors"
 	"fmt"
 	"mime/multipart"
+	"net"
 	"net/http"
 	"reflect"
 	"strings"
+	"time"
 
 	"github.com/go-playground/validator/v10"
+)
+
+// Error variables for static error handling.
+var (
+	ErrJSONSourceNotImplemented = errors.New("JSON source extraction not implemented in extractFromSource")
+	ErrUnknownSourceType        = errors.New("unknown source type")
 )
 
 // PathDecoder implements RequestDecoder for URL path parameters.
@@ -61,12 +70,14 @@ func (d *PathDecoder[T]) Decode(r *http.Request) (T, error) {
 	if d.validator != nil {
 		if err := d.validator.Struct(result); err != nil {
 			validationErrors := make(map[string]string)
-			if validatorErrs, ok := err.(validator.ValidationErrors); ok {
+			var validatorErrs validator.ValidationErrors
+			if errors.As(err, &validatorErrs) {
 				for _, validatorErr := range validatorErrs {
 					field := strings.ToLower(validatorErr.Field())
 					validationErrors[field] = validatorErr.Tag()
 				}
 			}
+
 			return result, NewValidationError("Validation failed", validationErrors)
 		}
 	}
@@ -81,11 +92,11 @@ func (d *PathDecoder[T]) ContentTypes() []string {
 
 // extractPathParam extracts a path parameter from a URL path.
 // This is a simple implementation that works with the {param} format.
-func extractPathParam(path, paramName string) string {
+func extractPathParam(path, _ string) string {
 	// This is a basic implementation
 	// In a real router, you'd use the router's path matching capabilities
 
-	// For now, we'll extract based on the paramName being the last segment
+	// For now, we'll extract the last segment
 	// This is a simplified approach for the example
 	segments := strings.Split(strings.Trim(path, "/"), "/")
 	if len(segments) > 0 {
@@ -162,6 +173,11 @@ func NewCombinedDecoder[T any](validator *validator.Validate) *CombinedDecoder[T
 func (d *CombinedDecoder[T]) buildFieldExtractors() []FieldExtractor {
 	var result T
 	resultType := reflect.TypeOf(result)
+
+	// Handle case where T is interface{} or similar
+	if resultType == nil || resultType.Kind() != reflect.Struct {
+		return []FieldExtractor{}
+	}
 
 	var extractors []FieldExtractor
 
@@ -258,112 +274,217 @@ func (d *CombinedDecoder[T]) buildFieldExtractors() []FieldExtractor {
 func (d *CombinedDecoder[T]) Decode(r *http.Request) (T, error) {
 	var result T
 
-	// Use reflection to set field values
-	resultValue := reflect.ValueOf(&result).Elem()
+	if err := d.extractFieldsFromSources(r, &result); err != nil {
+		return result, err
+	}
 
-	// Extract data for each field using the pre-computed extractors
+	if err := d.handleSpecialCases(r, &result); err != nil {
+		return result, err
+	}
+
+	if err := d.validateCombinedResult(result); err != nil {
+		return result, err
+	}
+
+	return result, nil
+}
+
+// extractFieldsFromSources extracts data for each field using the pre-computed extractors.
+func (d *CombinedDecoder[T]) extractFieldsFromSources(r *http.Request, result *T) error {
+	resultValue := reflect.ValueOf(result).Elem()
+
 	for _, extractor := range d.extractors {
 		fieldValue := resultValue.FieldByName(extractor.FieldName)
 		if !fieldValue.CanSet() {
 			continue
 		}
 
-		// Try each source in precedence order until we find a value
-		var extractedValue string
-		var sourceFound SourceType
-
-		for _, sourceType := range extractor.Precedence {
-			// Find the source configuration for this type
-			var sourceConfig *FieldSource
-			for _, src := range extractor.Sources {
-				if src.Type == sourceType {
-					sourceConfig = &src
-					break
-				}
-			}
-
-			if sourceConfig == nil {
-				continue // This field doesn't have this source type
-			}
-
-			// Extract value from the appropriate source
-			value, err := d.extractFromSource(r, sourceType, sourceConfig.Name)
-			if err != nil {
-				continue // Try next source
-			}
-
-			if value != "" {
-				extractedValue = value
-				sourceFound = sourceType
-				break
-			}
+		if err := d.processFieldExtractor(r, &extractor, fieldValue); err != nil {
+			return err
 		}
+	}
 
-		// If no value found, try default
-		if extractedValue == "" {
-			for _, src := range extractor.Sources {
-				if src.Default != "" {
-					extractedValue = handleDefaultValue(src.Default)
-					break
-				}
-			}
-		}
+	return nil
+}
 
-		// Skip if still no value
-		if extractedValue == "" {
+// processFieldExtractor processes a single field extractor.
+func (d *CombinedDecoder[T]) processFieldExtractor(
+	r *http.Request, extractor *FieldExtractor, fieldValue reflect.Value,
+) error {
+	extractedValue, sourceFound := d.extractValueWithPrecedence(r, extractor)
+
+	if extractedValue == "" {
+		return nil
+	}
+
+	processedValue, transformedValue, err := d.processExtractedValue(extractor, extractedValue, sourceFound)
+	if err != nil {
+		return err
+	}
+
+	if processedValue != nil {
+		fieldValue.Set(reflect.ValueOf(processedValue))
+
+		return nil
+	}
+
+	// Use the transformed value if transformation occurred, otherwise use original
+	valueToUse := transformedValue
+	if valueToUse == "" {
+		valueToUse = extractedValue
+	}
+
+	if err := setFieldValueFromString(fieldValue, valueToUse); err != nil {
+		return fmt.Errorf("failed to set field %s: %w", extractor.FieldName, err)
+	}
+
+	return nil
+}
+
+// extractValueWithPrecedence tries each source in precedence order.
+func (d *CombinedDecoder[T]) extractValueWithPrecedence(
+	r *http.Request, extractor *FieldExtractor,
+) (string, SourceType) {
+	for _, sourceType := range extractor.Precedence {
+		sourceConfig := d.findSourceConfig(extractor.Sources, sourceType)
+		if sourceConfig == nil {
 			continue
 		}
 
-		// Apply transformations if specified
-		for _, src := range extractor.Sources {
-			if src.Type == sourceFound && src.Transform != "" {
-				transformed, err := applyTransformation(src.Transform, extractedValue)
-				if err != nil {
-					return result, fmt.Errorf("failed to transform field %s: %w", extractor.FieldName, err)
-				}
-				extractedValue = transformed
-				break
-			}
+		value, err := d.extractFromSource(r, sourceType, sourceConfig.Name)
+		if err != nil {
+			continue
 		}
 
-		// Apply format parsing if specified
-		for _, src := range extractor.Sources {
-			if src.Type == sourceFound && src.Format != "" {
-				formatted, err := applyFormat(src.Format, extractedValue, extractor.FieldType)
-				if err != nil {
-					return result, fmt.Errorf("failed to format field %s: %w", extractor.FieldName, err)
-				}
-				fieldValue.Set(reflect.ValueOf(formatted))
-				continue
-			}
-		}
-
-		// Set the field value based on its type
-		if err := setFieldValueFromString(fieldValue, extractedValue); err != nil {
-			return result, fmt.Errorf("failed to set field %s: %w", extractor.FieldName, err)
+		if value != "" {
+			return value, sourceType
 		}
 	}
 
-	// Handle special cases for file uploads and complex JSON from form data
-	if err := d.handleSpecialCases(r, &result); err != nil {
-		return result, err
-	}
-
-	// Validate the final result if we have a validator
-	if d.validator != nil {
-		if err := d.validator.Struct(result); err != nil {
-			validationErrors := make(map[string]string)
-			if validatorErrs, ok := err.(validator.ValidationErrors); ok {
-				for _, validatorErr := range validatorErrs {
-					field := strings.ToLower(validatorErr.Field())
-					validationErrors[field] = validatorErr.Tag()
-				}
-			}
-			return result, NewValidationError("Multi-source validation failed", validationErrors)
+	// Try default values
+	for _, src := range extractor.Sources {
+		if src.Default != "" {
+			return handleDefaultValue(src.Default), ""
 		}
 	}
 
-	return result, nil
+	return "", ""
+}
+
+// findSourceConfig finds the source configuration for a given type.
+func (d *CombinedDecoder[T]) findSourceConfig(sources []FieldSource, sourceType SourceType) *FieldSource {
+	for _, src := range sources {
+		if src.Type == sourceType {
+			return &src
+		}
+	}
+
+	return nil
+}
+
+// processExtractedValue applies transformations and formats to extracted values.
+// Returns (processedValue, transformedString, error).
+func (d *CombinedDecoder[T]) processExtractedValue(
+	extractor *FieldExtractor, extractedValue string, sourceFound SourceType,
+) (processedValue interface{}, transformedString string, err error) {
+	originalValue := extractedValue
+
+	// Apply transformations if specified
+	transformedValue, err := d.applyTransformationForSource(extractor.Sources, sourceFound, extractedValue)
+	if err != nil {
+		return nil, "", fmt.Errorf("failed to transform field %s: %w", extractor.FieldName, err)
+	}
+
+	// Apply format parsing if specified
+	formatted, err := d.applyFormatForSource(extractor.Sources, sourceFound, transformedValue, extractor.FieldType)
+	if err != nil {
+		return nil, "", fmt.Errorf("failed to format field %s: %w", extractor.FieldName, err)
+	}
+
+	if formatted != nil {
+		return formatted, transformedValue, nil
+	}
+
+	// Check if we need to handle special types after transformation
+	if extractor.FieldType == reflect.TypeOf(net.IP{}) {
+		ip := net.ParseIP(transformedValue)
+		if ip == nil {
+			return nil, "", fmt.Errorf("%w: %s", ErrInvalidIPAddress, transformedValue)
+		}
+
+		return ip, transformedValue, nil
+	}
+
+	if extractor.FieldType == reflect.TypeOf(time.Time{}) {
+		// Try to parse with standard formats
+		formats := []string{
+			time.RFC3339,
+			"2006-01-02 15:04:05",
+			"2006-01-02",
+		}
+		for _, format := range formats {
+			if t, err := time.Parse(format, transformedValue); err == nil {
+				return t, transformedValue, nil
+			}
+		}
+
+		return nil, "", fmt.Errorf("%w: %s", ErrInvalidTimeValue, transformedValue)
+	}
+
+	// Return the transformed value for basic type processing
+	if transformedValue != originalValue {
+		return nil, transformedValue, nil
+	}
+
+	return nil, "", nil
+}
+
+// applyTransformationForSource applies transformation for a specific source.
+func (d *CombinedDecoder[T]) applyTransformationForSource(
+	sources []FieldSource, sourceFound SourceType, value string,
+) (string, error) {
+	for _, src := range sources {
+		if src.Type == sourceFound && src.Transform != "" {
+			return applyTransformation(src.Transform, value)
+		}
+	}
+
+	return value, nil
+}
+
+// applyFormatForSource applies format parsing for a specific source.
+func (d *CombinedDecoder[T]) applyFormatForSource(
+	sources []FieldSource, sourceFound SourceType, value string, fieldType reflect.Type,
+) (interface{}, error) {
+	for _, src := range sources {
+		if src.Type == sourceFound && src.Format != "" {
+			return applyFormat(src.Format, value, fieldType)
+		}
+	}
+	//nolint:nilnil
+	return nil, nil
+}
+
+// validateCombinedResult validates the final combined result.
+func (d *CombinedDecoder[T]) validateCombinedResult(result T) error {
+	if d.validator == nil {
+		return nil
+	}
+
+	if err := d.validator.Struct(result); err != nil {
+		validationErrors := make(map[string]string)
+		var validatorErrs validator.ValidationErrors
+		if errors.As(err, &validatorErrs) {
+			for _, validatorErr := range validatorErrs {
+				field := strings.ToLower(validatorErr.Field())
+				validationErrors[field] = validatorErr.Tag()
+			}
+		}
+
+		return NewValidationError("Multi-source validation failed", validationErrors)
+	}
+
+	return nil
 }
 
 // extractFromSource extracts a value from a specific source type.
@@ -382,21 +503,23 @@ func (d *CombinedDecoder[T]) extractFromSource(r *http.Request, sourceType Sourc
 		if cookie, err := r.Cookie(name); err == nil {
 			return cookie.Value, nil
 		}
+
 		return "", nil
 
 	case SourceForm:
 		if err := r.ParseForm(); err != nil {
-			return "", err
+			return "", fmt.Errorf("failed to parse form: %w", err)
 		}
+
 		return r.FormValue(name), nil
 
 	case SourceJSON:
 		// For JSON, we need to decode the entire body and extract the field
 		// This is more complex and should be handled separately
-		return "", fmt.Errorf("JSON source extraction not implemented in extractFromSource")
+		return "", ErrJSONSourceNotImplemented
 
 	default:
-		return "", fmt.Errorf("unknown source type: %s", sourceType)
+		return "", fmt.Errorf("%w: %s", ErrUnknownSourceType, sourceType)
 	}
 }
 
@@ -404,6 +527,11 @@ func (d *CombinedDecoder[T]) extractFromSource(r *http.Request, sourceType Sourc
 func (d *CombinedDecoder[T]) handleSpecialCases(r *http.Request, result *T) error {
 	resultValue := reflect.ValueOf(result).Elem()
 	resultType := resultValue.Type()
+
+	// Handle case where T is interface{} or similar
+	if resultType.Kind() != reflect.Struct {
+		return nil
+	}
 
 	// Check if we need to handle JSON body or file uploads
 	needsJSON := false

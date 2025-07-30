@@ -38,6 +38,7 @@ func (e *NotFoundError) Error() string {
 	if e.Message != "" {
 		return e.Message
 	}
+
 	return fmt.Sprintf("%s with id '%s' not found", e.Resource, e.ID)
 }
 
@@ -110,7 +111,7 @@ type ErrorResponse struct {
 type DefaultErrorMapper struct{}
 
 // MapError maps application errors to HTTP status codes and responses.
-func (m *DefaultErrorMapper) MapError(err error) (int, interface{}) {
+func (m *DefaultErrorMapper) MapError(err error) (statusCode int, response interface{}) {
 	var valErr *ValidationError
 	if errors.As(err, &valErr) {
 		return http.StatusBadRequest, ErrorResponse{

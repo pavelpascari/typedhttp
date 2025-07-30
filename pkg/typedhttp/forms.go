@@ -2,6 +2,7 @@ package typedhttp
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"mime/multipart"
 	"net/http"
@@ -12,8 +13,19 @@ import (
 )
 
 const (
-	// MaxFormMemory is the maximum memory to use for parsing multipart forms (32MB)
+	// MaxFormMemory is the maximum memory to use for parsing multipart forms (32MB).
 	MaxFormMemory = 32 << 20
+)
+
+// Error variables for static error handling.
+var (
+	ErrFileUploadsNotAllowed = errors.New("file uploads not allowed")
+	ErrNoMultipartFormData   = errors.New("no multipart form data")
+	ErrNoFileFound           = errors.New("no file found for field")
+	ErrNoFilesFound          = errors.New("no files found for field")
+	ErrFileTypeMismatch      = errors.New("file type mismatch")
+	ErrFileTooLarge          = errors.New("file too large")
+	ErrInvalidFileType       = errors.New("invalid file type")
 )
 
 // FormDecoder implements RequestDecoder for form data (both multipart and URL-encoded).
@@ -45,7 +57,23 @@ func NewFormDecoderWithOptions[T any](validator *validator.Validate, maxMemory i
 func (d *FormDecoder[T]) Decode(r *http.Request) (T, error) {
 	var result T
 
-	// Parse the form data based on content type
+	if err := d.parseFormData(r); err != nil {
+		return result, err
+	}
+
+	if err := d.processFormFields(r, &result); err != nil {
+		return result, err
+	}
+
+	if err := d.validateResult(result); err != nil {
+		return result, err
+	}
+
+	return result, nil
+}
+
+// parseFormData parses the form data based on content type.
+func (d *FormDecoder[T]) parseFormData(r *http.Request) error {
 	contentType := r.Header.Get("Content-Type")
 
 	var err error
@@ -56,136 +84,204 @@ func (d *FormDecoder[T]) Decode(r *http.Request) (T, error) {
 	}
 
 	if err != nil {
-		return result, fmt.Errorf("failed to parse form data: %w", err)
+		return fmt.Errorf("failed to parse form data: %w", err)
 	}
 
-	// Use reflection to map form fields to struct fields
-	resultValue := reflect.ValueOf(&result).Elem()
+	return nil
+}
+
+// processFormFields processes all form fields using reflection.
+func (d *FormDecoder[T]) processFormFields(r *http.Request, result *T) error {
+	resultValue := reflect.ValueOf(result).Elem()
 	resultType := resultValue.Type()
 
 	for i := 0; i < resultType.NumField(); i++ {
 		field := resultType.Field(i)
 		fieldValue := resultValue.Field(i)
 
-		// Skip unexported fields
 		if !fieldValue.CanSet() {
 			continue
 		}
 
-		// Get the form field name from struct tag
 		formName := field.Tag.Get("form")
 		if formName == "" {
-			continue // Only process fields with form tags
-		}
-
-		// Get default value from struct tag
-		defaultValue := field.Tag.Get("default")
-
-		// Handle file uploads specially
-		if fieldValue.Type() == reflect.TypeOf((*multipart.FileHeader)(nil)) {
-			if !d.allowFiles {
-				return result, fmt.Errorf("file uploads not allowed")
-			}
-
-			if r.MultipartForm != nil && r.MultipartForm.File != nil {
-				if files, exists := r.MultipartForm.File[formName]; exists && len(files) > 0 {
-					fieldValue.Set(reflect.ValueOf(files[0]))
-				}
-			}
 			continue
 		}
 
-		// Handle slice of file headers for multiple file uploads
-		if fieldValue.Type() == reflect.TypeOf([]*multipart.FileHeader{}) {
-			if !d.allowFiles {
-				return result, fmt.Errorf("file uploads not allowed")
-			}
-
-			if r.MultipartForm != nil && r.MultipartForm.File != nil {
-				if files, exists := r.MultipartForm.File[formName]; exists {
-					fieldValue.Set(reflect.ValueOf(files))
-				}
-			}
-			continue
-		}
-
-		// Get the form value
-		var formValue string
-		if r.Form != nil {
-			formValues := r.Form[formName]
-			if len(formValues) > 0 {
-				formValue = formValues[0]
-			}
-		}
-
-		if formValue == "" && defaultValue != "" {
-			formValue = handleDefaultValue(defaultValue)
-		}
-
-		if formValue == "" {
-			continue // Skip empty form fields unless required (validation will catch this)
-		}
-
-		// Handle JSON parsing for complex fields
-		if field.Tag.Get("json_field") == "true" || strings.HasPrefix(formValue, "{") || strings.HasPrefix(formValue, "[") {
-			if err := d.parseJSONField(fieldValue, formValue); err != nil {
-				return result, fmt.Errorf("failed to parse JSON field %s: %w", formName, err)
-			}
-			continue
-		}
-
-		// Handle slice fields (comma-separated values)
-		if fieldValue.Kind() == reflect.Slice && fieldValue.Type().Elem().Kind() == reflect.String {
-			values := strings.Split(formValue, ",")
-			for i, val := range values {
-				values[i] = strings.TrimSpace(val)
-			}
-			fieldValue.Set(reflect.ValueOf(values))
-			continue
-		}
-
-		// Handle transformations
-		if transform := field.Tag.Get("transform"); transform != "" {
-			transformedValue, err := applyTransformation(transform, formValue)
-			if err != nil {
-				return result, fmt.Errorf("failed to transform form field %s: %w", formName, err)
-			}
-			formValue = transformedValue
-		}
-
-		// Handle custom formats (e.g., time parsing)
-		if format := field.Tag.Get("format"); format != "" {
-			formattedValue, err := applyFormat(format, formValue, fieldValue.Type())
-			if err != nil {
-				return result, fmt.Errorf("failed to format form field %s: %w", formName, err)
-			}
-
-			// Set the formatted value directly
-			fieldValue.Set(reflect.ValueOf(formattedValue))
-			continue
-		}
-
-		// Set the field value based on its type
-		if err := setFieldValueFromString(fieldValue, formValue); err != nil {
-			return result, fmt.Errorf("failed to set form field %s: %w", field.Name, err)
+		if err := d.processFormField(r, &field, fieldValue, formName); err != nil {
+			return err
 		}
 	}
 
-	// Perform validation if validator is available
-	if d.validator != nil {
-		if err := d.validator.Struct(result); err != nil {
-			validationErrors := make(map[string]string)
-			if validatorErrs, ok := err.(validator.ValidationErrors); ok {
-				for _, validatorErr := range validatorErrs {
-					field := strings.ToLower(validatorErr.Field())
-					validationErrors[field] = validatorErr.Tag()
-				}
-			}
-			return result, NewValidationError("Form validation failed", validationErrors)
+	return nil
+}
+
+// processFormField processes a single form field.
+func (d *FormDecoder[T]) processFormField(
+	r *http.Request, field *reflect.StructField, fieldValue reflect.Value, formName string,
+) error {
+	// Handle file uploads
+	if d.isFileUploadField(fieldValue) {
+		return d.handleFileUpload(r, fieldValue, formName)
+	}
+
+	// Get form value
+	formValue := d.getFormValue(r, formName, field.Tag.Get("default"))
+	if formValue == "" {
+		return nil
+	}
+
+	// Handle special field types
+	if d.isJSONField(field, formValue) {
+		return d.parseJSONField(fieldValue, formValue)
+	}
+
+	if d.isStringSliceField(fieldValue) {
+		d.handleStringSlice(fieldValue, formValue)
+
+		return nil
+	}
+
+	// Apply transformations and formats
+	processedValue, err := d.processFieldValue(field, formValue, fieldValue.Type())
+	if err != nil {
+		return fmt.Errorf("failed to process form field %s: %w", formName, err)
+	}
+
+	if processedValue != nil {
+		fieldValue.Set(reflect.ValueOf(processedValue))
+
+		return nil
+	}
+
+	// Set the field value based on its type
+	if err := setFieldValueFromString(fieldValue, formValue); err != nil {
+		return fmt.Errorf("failed to set form field %s: %w", field.Name, err)
+	}
+
+	return nil
+}
+
+// isFileUploadField checks if a field is for file upload.
+func (d *FormDecoder[T]) isFileUploadField(fieldValue reflect.Value) bool {
+	return fieldValue.Type() == reflect.TypeOf((*multipart.FileHeader)(nil)) ||
+		fieldValue.Type() == reflect.TypeOf([]*multipart.FileHeader{})
+}
+
+// handleFileUpload handles file upload fields.
+func (d *FormDecoder[T]) handleFileUpload(r *http.Request, fieldValue reflect.Value, formName string) error {
+	if !d.allowFiles {
+		return ErrFileUploadsNotAllowed
+	}
+
+	if r.MultipartForm == nil || r.MultipartForm.File == nil {
+		return nil
+	}
+
+	files, exists := r.MultipartForm.File[formName]
+	if !exists {
+		return nil
+	}
+
+	if fieldValue.Type() == reflect.TypeOf((*multipart.FileHeader)(nil)) {
+		if len(files) > 0 {
+			fieldValue.Set(reflect.ValueOf(files[0]))
+		}
+	} else {
+		fieldValue.Set(reflect.ValueOf(files))
+	}
+
+	return nil
+}
+
+// getFormValue retrieves a form value with default fallback.
+func (d *FormDecoder[T]) getFormValue(r *http.Request, formName, defaultValue string) string {
+	var formValue string
+	if r.Form != nil {
+		formValues := r.Form[formName]
+		if len(formValues) > 0 {
+			formValue = formValues[0]
 		}
 	}
 
-	return result, nil
+	if formValue == "" && defaultValue != "" {
+		formValue = handleDefaultValue(defaultValue)
+	}
+
+	return formValue
+}
+
+// isJSONField checks if a field should be parsed as JSON.
+func (d *FormDecoder[T]) isJSONField(field *reflect.StructField, formValue string) bool {
+	return field.Tag.Get("json_field") == "true" ||
+		strings.HasPrefix(formValue, "{") ||
+		strings.HasPrefix(formValue, "[")
+}
+
+// isStringSliceField checks if a field is a string slice.
+func (d *FormDecoder[T]) isStringSliceField(fieldValue reflect.Value) bool {
+	return fieldValue.Kind() == reflect.Slice &&
+		fieldValue.Type().Elem().Kind() == reflect.String
+}
+
+// handleStringSlice handles comma-separated string values.
+func (d *FormDecoder[T]) handleStringSlice(fieldValue reflect.Value, formValue string) {
+	values := strings.Split(formValue, ",")
+	for i, val := range values {
+		values[i] = strings.TrimSpace(val)
+	}
+	fieldValue.Set(reflect.ValueOf(values))
+}
+
+// processFieldValue applies transformations and formats to field values.
+func (d *FormDecoder[T]) processFieldValue(
+	field *reflect.StructField, formValue string, fieldType reflect.Type,
+) (interface{}, error) {
+	originalValue := formValue
+
+	// Handle transformations
+	if transform := field.Tag.Get("transform"); transform != "" {
+		transformedValue, err := applyTransformation(transform, formValue)
+		if err != nil {
+			return nil, err
+		}
+		formValue = transformedValue
+	}
+
+	// Handle custom formats
+	if format := field.Tag.Get("format"); format != "" {
+		return applyFormat(format, formValue, fieldType)
+	}
+
+	// Return transformed value if transformation was applied
+	if formValue != originalValue {
+		return formValue, nil
+	}
+
+	//nolint:nilnil
+	return nil, nil
+}
+
+// validateResult performs validation on the final result.
+func (d *FormDecoder[T]) validateResult(result T) error {
+	if d.validator == nil {
+		return nil
+	}
+
+	if err := d.validator.Struct(result); err != nil {
+		validationErrors := make(map[string]string)
+		var validatorErrs validator.ValidationErrors
+		if errors.As(err, &validatorErrs) {
+			for _, validatorErr := range validatorErrs {
+				field := strings.ToLower(validatorErr.Field())
+				validationErrors[field] = validatorErr.Tag()
+			}
+		}
+
+		return NewValidationError("Form validation failed", validationErrors)
+	}
+
+	return nil
 }
 
 // ContentTypes returns the supported content types for form decoding.
@@ -207,6 +303,7 @@ func (d *FormDecoder[T]) parseJSONField(fieldValue reflect.Value, jsonValue stri
 
 	// Set the field value
 	fieldValue.Set(fieldPtr.Elem())
+
 	return nil
 }
 
@@ -236,12 +333,12 @@ func GetFormValues(r *http.Request, name string) []string {
 // GetFileHeader retrieves a file header from multipart form data.
 func GetFileHeader(r *http.Request, name string) (*multipart.FileHeader, error) {
 	if r.MultipartForm == nil || r.MultipartForm.File == nil {
-		return nil, fmt.Errorf("no multipart form data")
+		return nil, ErrNoMultipartFormData
 	}
 
 	files, exists := r.MultipartForm.File[name]
 	if !exists || len(files) == 0 {
-		return nil, fmt.Errorf("no file found for field %s", name)
+		return nil, fmt.Errorf("%w: %s", ErrNoFileFound, name)
 	}
 
 	return files[0], nil
@@ -250,12 +347,12 @@ func GetFileHeader(r *http.Request, name string) (*multipart.FileHeader, error) 
 // GetFileHeaders retrieves all file headers for a field (for multiple file uploads).
 func GetFileHeaders(r *http.Request, name string) ([]*multipart.FileHeader, error) {
 	if r.MultipartForm == nil || r.MultipartForm.File == nil {
-		return nil, fmt.Errorf("no multipart form data")
+		return nil, ErrNoMultipartFormData
 	}
 
 	files, exists := r.MultipartForm.File[name]
 	if !exists {
-		return nil, fmt.Errorf("no files found for field %s", name)
+		return nil, fmt.Errorf("%w: %s", ErrNoFilesFound, name)
 	}
 
 	return files, nil
@@ -297,7 +394,7 @@ func GetFormInfo(r *http.Request) *FormInfo {
 	return info
 }
 
-// FormOptions Advanced form processing options
+// FormOptions Advanced form processing options.
 type FormOptions struct {
 	MaxMemory    int64    // Maximum memory for multipart forms
 	AllowFiles   bool     // Whether to allow file uploads
@@ -309,11 +406,11 @@ type FormOptions struct {
 // ValidateFileUpload validates an uploaded file against the form options.
 func ValidateFileUpload(file *multipart.FileHeader, options FormOptions) error {
 	if !options.AllowFiles {
-		return fmt.Errorf("file uploads not allowed")
+		return ErrFileUploadsNotAllowed
 	}
 
 	if options.MaxFileSize > 0 && file.Size > options.MaxFileSize {
-		return fmt.Errorf("file size %d exceeds maximum %d", file.Size, options.MaxFileSize)
+		return fmt.Errorf("%w: size %d exceeds maximum %d", ErrFileTooLarge, file.Size, options.MaxFileSize)
 	}
 
 	if len(options.AllowedTypes) > 0 {
@@ -323,11 +420,12 @@ func ValidateFileUpload(file *multipart.FileHeader, options FormOptions) error {
 		for _, allowedType := range options.AllowedTypes {
 			if strings.Contains(fileHeader, allowedType) {
 				allowed = true
+
 				break
 			}
 		}
 		if !allowed {
-			return fmt.Errorf("file type %s not allowed", fileHeader)
+			return fmt.Errorf("%w: %s", ErrInvalidFileType, fileHeader)
 		}
 	}
 

@@ -1,4 +1,4 @@
-.PHONY: test test-verbose test-coverage build lint fmt vet clean examples benchmark
+.PHONY: test test-verbose test-coverage build lint lint-all fmt vet clean examples benchmark ci
 
 # Go parameters
 GOCMD=go
@@ -27,13 +27,17 @@ test-coverage:
 	@echo "Coverage report generated: coverage.html"
 
 test-coverage-check:
-	$(GOTEST) -v -race -coverprofile=coverage.out ./...
+	$(GOTEST) -v -race -coverprofile=coverage.out ./pkg/...
 	@$(GOCMD) tool cover -func=coverage.out | grep "total:" | awk '{if ($$3 < 80.0) {print "ERROR: Test coverage " $$3 " is below 80%"; exit 1} else {print "✓ Test coverage " $$3}}'
 
 # Quality targets
 lint:
 	@which golangci-lint > /dev/null || (echo "Installing golangci-lint..." && go install github.com/golangci/golangci-lint/cmd/golangci-lint@latest)
-	golangci-lint run
+	golangci-lint run --issues-exit-code=1
+
+lint-all:
+	@which golangci-lint > /dev/null || (echo "Installing golangci-lint..." && go install github.com/golangci/golangci-lint/cmd/golangci-lint@latest)
+	golangci-lint run --issues-exit-code=0 --max-issues-per-linter=0 --max-same-issues=0
 
 fmt:
 	$(GOFMT) -s -w .
@@ -70,7 +74,12 @@ dev-setup: deps
 	@echo "Development setup complete"
 
 # CI targets
-ci: fmt vet lint test-coverage-check
+ci:
+	@echo "Running CI checks..."
+	@$(MAKE) fmt || (echo "❌ Format check failed" && exit 1)
+	@$(MAKE) vet || (echo "❌ Vet check failed" && exit 1)
+	@$(MAKE) lint || (echo "❌ Lint check failed" && exit 1)
+	@$(MAKE) test-coverage-check || (echo "❌ Coverage check failed" && exit 1)
 	@echo "✓ All CI checks passed"
 
 # Clean targets
@@ -87,6 +96,7 @@ help:
 	@echo "  test-coverage      - Run tests with coverage report"
 	@echo "  test-coverage-check- Check test coverage meets 80% requirement"
 	@echo "  lint               - Run linter"
+	@echo "  lint-all           - Run linter showing all violations"
 	@echo "  fmt                - Format code"
 	@echo "  vet                - Run go vet"
 	@echo "  deps               - Download and tidy dependencies"

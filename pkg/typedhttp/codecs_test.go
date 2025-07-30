@@ -39,7 +39,7 @@ func TestJSONDecoder_Success(t *testing.T) {
 	jsonData, err := json.Marshal(requestBody)
 	require.NoError(t, err)
 
-	req := httptest.NewRequest("POST", "/test", bytes.NewReader(jsonData))
+	req := httptest.NewRequest(http.MethodPost, "/test", bytes.NewReader(jsonData))
 	req.Header.Set("Content-Type", "application/json")
 
 	result, err := decoder.Decode(req)
@@ -62,7 +62,7 @@ func TestJSONDecoder_ValidationError(t *testing.T) {
 	jsonData, err := json.Marshal(requestBody)
 	require.NoError(t, err)
 
-	req := httptest.NewRequest("POST", "/test", bytes.NewReader(jsonData))
+	req := httptest.NewRequest(http.MethodPost, "/test", bytes.NewReader(jsonData))
 	req.Header.Set("Content-Type", "application/json")
 
 	_, err = decoder.Decode(req)
@@ -78,7 +78,7 @@ func TestJSONDecoder_ValidationError(t *testing.T) {
 func TestJSONDecoder_InvalidJSON(t *testing.T) {
 	decoder := typedhttp.NewJSONDecoder[TestCodecRequest](validator.New())
 
-	req := httptest.NewRequest("POST", "/test", strings.NewReader("invalid json"))
+	req := httptest.NewRequest(http.MethodPost, "/test", strings.NewReader("invalid json"))
 	req.Header.Set("Content-Type", "application/json")
 
 	_, err := decoder.Decode(req)
@@ -98,7 +98,7 @@ func TestJSONDecoder_ContentTypes(t *testing.T) {
 func TestQueryDecoder_Success(t *testing.T) {
 	decoder := typedhttp.NewQueryDecoder[TestQueryRequest](validator.New())
 
-	req := httptest.NewRequest("GET", "/test?q=search&limit=20&offset=5", nil)
+	req := httptest.NewRequest(http.MethodGet, "/test?q=search&limit=20&offset=5", http.NoBody)
 
 	result, err := decoder.Decode(req)
 
@@ -111,7 +111,7 @@ func TestQueryDecoder_Success(t *testing.T) {
 func TestQueryDecoder_DefaultValues(t *testing.T) {
 	decoder := typedhttp.NewQueryDecoder[TestQueryRequest](validator.New())
 
-	req := httptest.NewRequest("GET", "/test?q=search", nil)
+	req := httptest.NewRequest(http.MethodGet, "/test?q=search", http.NoBody)
 
 	result, err := decoder.Decode(req)
 
@@ -124,7 +124,7 @@ func TestQueryDecoder_DefaultValues(t *testing.T) {
 func TestQueryDecoder_ValidationError(t *testing.T) {
 	decoder := typedhttp.NewQueryDecoder[TestQueryRequest](validator.New())
 
-	req := httptest.NewRequest("GET", "/test?limit=200", nil) // Missing required 'q', limit too high
+	req := httptest.NewRequest(http.MethodGet, "/test?limit=200", http.NoBody) // Missing required 'q', limit too high
 
 	_, err := decoder.Decode(req)
 
@@ -211,7 +211,7 @@ func TestEnvelopeEncoder_ContentType(t *testing.T) {
 	assert.Equal(t, "application/json", contentType)
 }
 
-// Test setFieldValue function indirectly through QueryDecoder
+// Test setFieldValue function indirectly through QueryDecoder.
 func TestQueryDecoder_FieldTypes(t *testing.T) {
 	type AllTypesRequest struct {
 		StringField string  `query:"str"`
@@ -231,7 +231,7 @@ func TestQueryDecoder_FieldTypes(t *testing.T) {
 	values.Set("bool", "true")
 	values.Set("uint", "100")
 
-	req := httptest.NewRequest("GET", "/test?"+values.Encode(), nil)
+	req := httptest.NewRequest(http.MethodGet, "/test?"+values.Encode(), http.NoBody)
 
 	result, err := decoder.Decode(req)
 
