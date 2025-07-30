@@ -2,6 +2,7 @@ package typedhttp
 
 import (
 	"fmt"
+	"mime/multipart"
 	"net/http"
 	"reflect"
 	"strings"
@@ -51,7 +52,7 @@ func (d *PathDecoder[T]) Decode(r *http.Request) (T, error) {
 		}
 
 		// Set the field value based on its type
-		if err := setFieldValue(fieldValue, pathValue); err != nil {
+		if err := setFieldValueFromString(fieldValue, pathValue); err != nil {
 			return result, fmt.Errorf("failed to set field %s: %w", field.Name, err)
 		}
 	}
@@ -96,51 +97,261 @@ func extractPathParam(path, paramName string) string {
 	return ""
 }
 
-// CombinedDecoder combines multiple decoders to handle different types of request data.
+// SourceType represents the type of data source for request fields.
+type SourceType string
+
+const (
+	SourcePath   SourceType = "path"
+	SourceQuery  SourceType = "query"
+	SourceHeader SourceType = "header"
+	SourceCookie SourceType = "cookie"
+	SourceForm   SourceType = "form"
+	SourceJSON   SourceType = "json"
+)
+
+// FieldSource represents a single source for a request field.
+type FieldSource struct {
+	Type      SourceType
+	Name      string
+	Default   string
+	Transform string
+	Format    string
+	Required  bool
+}
+
+// FieldExtractor contains information about how to extract a single field from the request.
+type FieldExtractor struct {
+	FieldName   string
+	FieldType   reflect.Type
+	Sources     []FieldSource
+	Precedence  []SourceType
+	Validation  string
+}
+
+// CombinedDecoder combines multiple decoders to handle different types of request data with precedence rules.
 type CombinedDecoder[T any] struct {
-	pathDecoder  *PathDecoder[T]
-	queryDecoder *QueryDecoder[T]
-	jsonDecoder  *JSONDecoder[T]
+	pathDecoder   *PathDecoder[T]
+	queryDecoder  *QueryDecoder[T]
+	headerDecoder *HeaderDecoder[T]
+	cookieDecoder *CookieDecoder[T]
+	formDecoder   *FormDecoder[T]
+	jsonDecoder   *JSONDecoder[T]
+	extractors    []FieldExtractor // Pre-computed field extraction rules
+	validator     *validator.Validate
 }
 
-// NewCombinedDecoder creates a decoder that can handle path, query, and JSON data.
+// NewCombinedDecoder creates a decoder that can handle multiple data sources.
 func NewCombinedDecoder[T any](validator *validator.Validate) *CombinedDecoder[T] {
-	return &CombinedDecoder[T]{
-		pathDecoder:  NewPathDecoder[T](validator),
-		queryDecoder: NewQueryDecoder[T](validator),
-		jsonDecoder:  NewJSONDecoder[T](validator),
+	decoder := &CombinedDecoder[T]{
+		pathDecoder:   NewPathDecoder[T](validator),
+		queryDecoder:  NewQueryDecoder[T](validator),
+		headerDecoder: NewHeaderDecoder[T](validator),
+		cookieDecoder: NewCookieDecoder[T](validator),
+		formDecoder:   NewFormDecoder[T](validator),
+		jsonDecoder:   NewJSONDecoder[T](validator),
+		validator:     validator,
 	}
+	
+	// Pre-compute field extraction rules
+	decoder.extractors = decoder.buildFieldExtractors()
+	
+	return decoder
 }
 
-// Decode decodes request data from multiple sources (path, query, body).
-func (d *CombinedDecoder[T]) Decode(r *http.Request) (T, error) {
+// buildFieldExtractors analyzes the target type and builds extraction rules.
+func (d *CombinedDecoder[T]) buildFieldExtractors() []FieldExtractor {
 	var result T
+	resultType := reflect.TypeOf(result)
 	
-	// Start with path parameters
-	if pathResult, err := d.pathDecoder.Decode(r); err == nil {
-		result = pathResult
-	}
+	var extractors []FieldExtractor
 	
-	// Merge query parameters
-	if queryResult, err := d.queryDecoder.Decode(r); err == nil {
-		result = mergeStructs(result, queryResult)
-	}
-	
-	// If there's a body and it's JSON, merge that too
-	if r.Body != nil && r.ContentLength > 0 {
-		contentType := r.Header.Get("Content-Type")
-		if strings.Contains(contentType, "application/json") {
-			if jsonResult, err := d.jsonDecoder.Decode(r); err != nil {
-				return result, err // Return JSON decode error immediately
-			} else {
-				result = mergeStructs(result, jsonResult)
+	for i := 0; i < resultType.NumField(); i++ {
+		field := resultType.Field(i)
+		
+		// Skip unexported fields
+		if !field.IsExported() {
+			continue
+		}
+		
+		extractor := FieldExtractor{
+			FieldName: field.Name,
+			FieldType: field.Type,
+			Sources:   []FieldSource{},
+		}
+		
+		// Check for each source type
+		if pathName := field.Tag.Get("path"); pathName != "" {
+			extractor.Sources = append(extractor.Sources, FieldSource{
+				Type: SourcePath,
+				Name: pathName,
+			})
+		}
+		
+		if queryName := field.Tag.Get("query"); queryName != "" {
+			extractor.Sources = append(extractor.Sources, FieldSource{
+				Type:    SourceQuery,
+				Name:    queryName,
+				Default: field.Tag.Get("default"),
+			})
+		}
+		
+		if headerName := field.Tag.Get("header"); headerName != "" {
+			extractor.Sources = append(extractor.Sources, FieldSource{
+				Type:      SourceHeader,
+				Name:      headerName,
+				Default:   field.Tag.Get("default"),
+				Transform: field.Tag.Get("transform"),
+				Format:    field.Tag.Get("format"),
+			})
+		}
+		
+		if cookieName := field.Tag.Get("cookie"); cookieName != "" {
+			extractor.Sources = append(extractor.Sources, FieldSource{
+				Type:    SourceCookie,
+				Name:    cookieName,
+				Default: field.Tag.Get("default"),
+			})
+		}
+		
+		if formName := field.Tag.Get("form"); formName != "" {
+			extractor.Sources = append(extractor.Sources, FieldSource{
+				Type:    SourceForm,
+				Name:    formName,
+				Default: field.Tag.Get("default"),
+			})
+		}
+		
+		if jsonName := field.Tag.Get("json"); jsonName != "" {
+			extractor.Sources = append(extractor.Sources, FieldSource{
+				Type: SourceJSON,
+				Name: jsonName,
+			})
+		}
+		
+		// Parse precedence rules
+		if precedenceStr := field.Tag.Get("precedence"); precedenceStr != "" {
+			precedenceParts := strings.Split(precedenceStr, ",")
+			for _, part := range precedenceParts {
+				part = strings.TrimSpace(part)
+				extractor.Precedence = append(extractor.Precedence, SourceType(part))
 			}
+		} else {
+			// Default precedence: path > header > cookie > query > form > json
+			extractor.Precedence = []SourceType{
+				SourcePath, SourceHeader, SourceCookie, SourceQuery, SourceForm, SourceJSON,
+			}
+		}
+		
+		// Store validation rules
+		extractor.Validation = field.Tag.Get("validate")
+		
+		// Only add extractor if it has sources
+		if len(extractor.Sources) > 0 {
+			extractors = append(extractors, extractor)
 		}
 	}
 	
+	return extractors
+}
+
+// Decode decodes request data from multiple sources using precedence rules.
+func (d *CombinedDecoder[T]) Decode(r *http.Request) (T, error) {
+	var result T
+	
+	// Use reflection to set field values
+	resultValue := reflect.ValueOf(&result).Elem()
+	
+	// Extract data for each field using the pre-computed extractors
+	for _, extractor := range d.extractors {
+		fieldValue := resultValue.FieldByName(extractor.FieldName)
+		if !fieldValue.CanSet() {
+			continue
+		}
+		
+		// Try each source in precedence order until we find a value
+		var extractedValue string
+		var sourceFound SourceType
+		
+		for _, sourceType := range extractor.Precedence {
+			// Find the source configuration for this type
+			var sourceConfig *FieldSource
+			for _, src := range extractor.Sources {
+				if src.Type == sourceType {
+					sourceConfig = &src
+					break
+				}
+			}
+			
+			if sourceConfig == nil {
+				continue // This field doesn't have this source type
+			}
+			
+			// Extract value from the appropriate source
+			value, err := d.extractFromSource(r, sourceType, sourceConfig.Name)
+			if err != nil {
+				continue // Try next source
+			}
+			
+			if value != "" {
+				extractedValue = value
+				sourceFound = sourceType
+				break
+			}
+		}
+		
+		// If no value found, try default
+		if extractedValue == "" {
+			for _, src := range extractor.Sources {
+				if src.Default != "" {
+					extractedValue = handleDefaultValue(src.Default)
+					break
+				}
+			}
+		}
+		
+		// Skip if still no value
+		if extractedValue == "" {
+			continue
+		}
+		
+		// Apply transformations if specified
+		for _, src := range extractor.Sources {
+			if src.Type == sourceFound && src.Transform != "" {
+				transformed, err := applyTransformation(src.Transform, extractedValue)
+				if err != nil {
+					return result, fmt.Errorf("failed to transform field %s: %w", extractor.FieldName, err)
+				}
+				extractedValue = transformed
+				break
+			}
+		}
+		
+		// Apply format parsing if specified
+		for _, src := range extractor.Sources {
+			if src.Type == sourceFound && src.Format != "" {
+				formatted, err := applyFormat(src.Format, extractedValue, extractor.FieldType)
+				if err != nil {
+					return result, fmt.Errorf("failed to format field %s: %w", extractor.FieldName, err)
+				}
+				fieldValue.Set(reflect.ValueOf(formatted))
+				continue
+			}
+		}
+		
+		// Set the field value based on its type
+		if err := setFieldValueFromString(fieldValue, extractedValue); err != nil {
+			return result, fmt.Errorf("failed to set field %s: %w", extractor.FieldName, err)
+		}
+	}
+	
+	// Handle special cases for file uploads and complex JSON from form data
+	if err := d.handleSpecialCases(r, &result); err != nil {
+		return result, err
+	}
+	
 	// Validate the final result if we have a validator
-	if d.jsonDecoder.validator != nil {
-		if err := d.jsonDecoder.validator.Struct(result); err != nil {
+	if d.validator != nil {
+		if err := d.validator.Struct(result); err != nil {
 			validationErrors := make(map[string]string)
 			if validatorErrs, ok := err.(validator.ValidationErrors); ok {
 				for _, validatorErr := range validatorErrs {
@@ -148,11 +359,92 @@ func (d *CombinedDecoder[T]) Decode(r *http.Request) (T, error) {
 					validationErrors[field] = validatorErr.Tag()
 				}
 			}
-			return result, NewValidationError("Validation failed", validationErrors)
+			return result, NewValidationError("Multi-source validation failed", validationErrors)
 		}
 	}
 	
 	return result, nil
+}
+
+// extractFromSource extracts a value from a specific source type.
+func (d *CombinedDecoder[T]) extractFromSource(r *http.Request, sourceType SourceType, name string) (string, error) {
+	switch sourceType {
+	case SourcePath:
+		return extractPathParam(r.URL.Path, name), nil
+		
+	case SourceQuery:
+		return r.URL.Query().Get(name), nil
+		
+	case SourceHeader:
+		return r.Header.Get(name), nil
+		
+	case SourceCookie:
+		if cookie, err := r.Cookie(name); err == nil {
+			return cookie.Value, nil
+		}
+		return "", nil
+		
+	case SourceForm:
+		if err := r.ParseForm(); err != nil {
+			return "", err
+		}
+		return r.FormValue(name), nil
+		
+	case SourceJSON:
+		// For JSON, we need to decode the entire body and extract the field
+		// This is more complex and should be handled separately
+		return "", fmt.Errorf("JSON source extraction not implemented in extractFromSource")
+		
+	default:
+		return "", fmt.Errorf("unknown source type: %s", sourceType)
+	}
+}
+
+// handleSpecialCases handles file uploads and complex JSON extraction.
+func (d *CombinedDecoder[T]) handleSpecialCases(r *http.Request, result *T) error {
+	resultValue := reflect.ValueOf(result).Elem()
+	resultType := resultValue.Type()
+	
+	// Check if we need to handle JSON body or file uploads
+	needsJSON := false
+	needsForm := false
+	
+	for i := 0; i < resultType.NumField(); i++ {
+		field := resultType.Field(i)
+		
+		if field.Tag.Get("json") != "" {
+			needsJSON = true
+		}
+		
+		if field.Tag.Get("form") != "" {
+			needsForm = true
+		}
+		
+		// Check for file upload fields
+		if field.Type == reflect.TypeOf((*multipart.FileHeader)(nil)) ||
+		   field.Type == reflect.TypeOf([]*multipart.FileHeader{}) {
+			needsForm = true
+		}
+	}
+	
+	// Handle JSON body if needed
+	if needsJSON && r.Body != nil && r.ContentLength > 0 {
+		contentType := r.Header.Get("Content-Type")
+		if strings.Contains(contentType, "application/json") {
+			if jsonResult, err := d.jsonDecoder.Decode(r); err == nil {
+				*result = mergeStructs(*result, jsonResult)
+			}
+		}
+	}
+	
+	// Handle form data if needed (including file uploads)
+	if needsForm {
+		if formResult, err := d.formDecoder.Decode(r); err == nil {
+			*result = mergeStructs(*result, formResult)
+		}
+	}
+	
+	return nil
 }
 
 // ContentTypes returns all supported content types.
