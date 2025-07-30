@@ -25,7 +25,7 @@ func NewPathDecoder[T any](validator *validator.Validate) *PathDecoder[T] {
 // Decode decodes path parameters into the target type using reflection.
 func (d *PathDecoder[T]) Decode(r *http.Request) (T, error) {
 	var result T
-	
+
 	// Use reflection to map path parameters to struct fields
 	resultValue := reflect.ValueOf(&result).Elem()
 	resultType := resultValue.Type()
@@ -33,7 +33,7 @@ func (d *PathDecoder[T]) Decode(r *http.Request) (T, error) {
 	for i := 0; i < resultType.NumField(); i++ {
 		field := resultType.Field(i)
 		fieldValue := resultValue.Field(i)
-		
+
 		// Skip unexported fields
 		if !fieldValue.CanSet() {
 			continue
@@ -84,7 +84,7 @@ func (d *PathDecoder[T]) ContentTypes() []string {
 func extractPathParam(path, paramName string) string {
 	// This is a basic implementation
 	// In a real router, you'd use the router's path matching capabilities
-	
+
 	// For now, we'll extract based on the paramName being the last segment
 	// This is a simplified approach for the example
 	segments := strings.Split(strings.Trim(path, "/"), "/")
@@ -93,7 +93,7 @@ func extractPathParam(path, paramName string) string {
 		// This works for simple cases like /users/{id}
 		return segments[len(segments)-1]
 	}
-	
+
 	return ""
 }
 
@@ -121,11 +121,11 @@ type FieldSource struct {
 
 // FieldExtractor contains information about how to extract a single field from the request.
 type FieldExtractor struct {
-	FieldName   string
-	FieldType   reflect.Type
-	Sources     []FieldSource
-	Precedence  []SourceType
-	Validation  string
+	FieldName  string
+	FieldType  reflect.Type
+	Sources    []FieldSource
+	Precedence []SourceType
+	Validation string
 }
 
 // CombinedDecoder combines multiple decoders to handle different types of request data with precedence rules.
@@ -151,10 +151,10 @@ func NewCombinedDecoder[T any](validator *validator.Validate) *CombinedDecoder[T
 		jsonDecoder:   NewJSONDecoder[T](validator),
 		validator:     validator,
 	}
-	
+
 	// Pre-compute field extraction rules
 	decoder.extractors = decoder.buildFieldExtractors()
-	
+
 	return decoder
 }
 
@@ -162,23 +162,23 @@ func NewCombinedDecoder[T any](validator *validator.Validate) *CombinedDecoder[T
 func (d *CombinedDecoder[T]) buildFieldExtractors() []FieldExtractor {
 	var result T
 	resultType := reflect.TypeOf(result)
-	
+
 	var extractors []FieldExtractor
-	
+
 	for i := 0; i < resultType.NumField(); i++ {
 		field := resultType.Field(i)
-		
+
 		// Skip unexported fields
 		if !field.IsExported() {
 			continue
 		}
-		
+
 		extractor := FieldExtractor{
 			FieldName: field.Name,
 			FieldType: field.Type,
 			Sources:   []FieldSource{},
 		}
-		
+
 		// Check for each source type
 		if pathName := field.Tag.Get("path"); pathName != "" {
 			extractor.Sources = append(extractor.Sources, FieldSource{
@@ -186,7 +186,7 @@ func (d *CombinedDecoder[T]) buildFieldExtractors() []FieldExtractor {
 				Name: pathName,
 			})
 		}
-		
+
 		if queryName := field.Tag.Get("query"); queryName != "" {
 			extractor.Sources = append(extractor.Sources, FieldSource{
 				Type:    SourceQuery,
@@ -194,7 +194,7 @@ func (d *CombinedDecoder[T]) buildFieldExtractors() []FieldExtractor {
 				Default: field.Tag.Get("default"),
 			})
 		}
-		
+
 		if headerName := field.Tag.Get("header"); headerName != "" {
 			extractor.Sources = append(extractor.Sources, FieldSource{
 				Type:      SourceHeader,
@@ -204,7 +204,7 @@ func (d *CombinedDecoder[T]) buildFieldExtractors() []FieldExtractor {
 				Format:    field.Tag.Get("format"),
 			})
 		}
-		
+
 		if cookieName := field.Tag.Get("cookie"); cookieName != "" {
 			extractor.Sources = append(extractor.Sources, FieldSource{
 				Type:    SourceCookie,
@@ -212,7 +212,7 @@ func (d *CombinedDecoder[T]) buildFieldExtractors() []FieldExtractor {
 				Default: field.Tag.Get("default"),
 			})
 		}
-		
+
 		if formName := field.Tag.Get("form"); formName != "" {
 			extractor.Sources = append(extractor.Sources, FieldSource{
 				Type:    SourceForm,
@@ -220,14 +220,14 @@ func (d *CombinedDecoder[T]) buildFieldExtractors() []FieldExtractor {
 				Default: field.Tag.Get("default"),
 			})
 		}
-		
+
 		if jsonName := field.Tag.Get("json"); jsonName != "" {
 			extractor.Sources = append(extractor.Sources, FieldSource{
 				Type: SourceJSON,
 				Name: jsonName,
 			})
 		}
-		
+
 		// Parse precedence rules
 		if precedenceStr := field.Tag.Get("precedence"); precedenceStr != "" {
 			precedenceParts := strings.Split(precedenceStr, ",")
@@ -241,37 +241,37 @@ func (d *CombinedDecoder[T]) buildFieldExtractors() []FieldExtractor {
 				SourcePath, SourceHeader, SourceCookie, SourceQuery, SourceForm, SourceJSON,
 			}
 		}
-		
+
 		// Store validation rules
 		extractor.Validation = field.Tag.Get("validate")
-		
+
 		// Only add extractor if it has sources
 		if len(extractor.Sources) > 0 {
 			extractors = append(extractors, extractor)
 		}
 	}
-	
+
 	return extractors
 }
 
 // Decode decodes request data from multiple sources using precedence rules.
 func (d *CombinedDecoder[T]) Decode(r *http.Request) (T, error) {
 	var result T
-	
+
 	// Use reflection to set field values
 	resultValue := reflect.ValueOf(&result).Elem()
-	
+
 	// Extract data for each field using the pre-computed extractors
 	for _, extractor := range d.extractors {
 		fieldValue := resultValue.FieldByName(extractor.FieldName)
 		if !fieldValue.CanSet() {
 			continue
 		}
-		
+
 		// Try each source in precedence order until we find a value
 		var extractedValue string
 		var sourceFound SourceType
-		
+
 		for _, sourceType := range extractor.Precedence {
 			// Find the source configuration for this type
 			var sourceConfig *FieldSource
@@ -281,24 +281,24 @@ func (d *CombinedDecoder[T]) Decode(r *http.Request) (T, error) {
 					break
 				}
 			}
-			
+
 			if sourceConfig == nil {
 				continue // This field doesn't have this source type
 			}
-			
+
 			// Extract value from the appropriate source
 			value, err := d.extractFromSource(r, sourceType, sourceConfig.Name)
 			if err != nil {
 				continue // Try next source
 			}
-			
+
 			if value != "" {
 				extractedValue = value
 				sourceFound = sourceType
 				break
 			}
 		}
-		
+
 		// If no value found, try default
 		if extractedValue == "" {
 			for _, src := range extractor.Sources {
@@ -308,12 +308,12 @@ func (d *CombinedDecoder[T]) Decode(r *http.Request) (T, error) {
 				}
 			}
 		}
-		
+
 		// Skip if still no value
 		if extractedValue == "" {
 			continue
 		}
-		
+
 		// Apply transformations if specified
 		for _, src := range extractor.Sources {
 			if src.Type == sourceFound && src.Transform != "" {
@@ -325,7 +325,7 @@ func (d *CombinedDecoder[T]) Decode(r *http.Request) (T, error) {
 				break
 			}
 		}
-		
+
 		// Apply format parsing if specified
 		for _, src := range extractor.Sources {
 			if src.Type == sourceFound && src.Format != "" {
@@ -337,18 +337,18 @@ func (d *CombinedDecoder[T]) Decode(r *http.Request) (T, error) {
 				continue
 			}
 		}
-		
+
 		// Set the field value based on its type
 		if err := setFieldValueFromString(fieldValue, extractedValue); err != nil {
 			return result, fmt.Errorf("failed to set field %s: %w", extractor.FieldName, err)
 		}
 	}
-	
+
 	// Handle special cases for file uploads and complex JSON from form data
 	if err := d.handleSpecialCases(r, &result); err != nil {
 		return result, err
 	}
-	
+
 	// Validate the final result if we have a validator
 	if d.validator != nil {
 		if err := d.validator.Struct(result); err != nil {
@@ -362,7 +362,7 @@ func (d *CombinedDecoder[T]) Decode(r *http.Request) (T, error) {
 			return result, NewValidationError("Multi-source validation failed", validationErrors)
 		}
 	}
-	
+
 	return result, nil
 }
 
@@ -371,30 +371,30 @@ func (d *CombinedDecoder[T]) extractFromSource(r *http.Request, sourceType Sourc
 	switch sourceType {
 	case SourcePath:
 		return extractPathParam(r.URL.Path, name), nil
-		
+
 	case SourceQuery:
 		return r.URL.Query().Get(name), nil
-		
+
 	case SourceHeader:
 		return r.Header.Get(name), nil
-		
+
 	case SourceCookie:
 		if cookie, err := r.Cookie(name); err == nil {
 			return cookie.Value, nil
 		}
 		return "", nil
-		
+
 	case SourceForm:
 		if err := r.ParseForm(); err != nil {
 			return "", err
 		}
 		return r.FormValue(name), nil
-		
+
 	case SourceJSON:
 		// For JSON, we need to decode the entire body and extract the field
 		// This is more complex and should be handled separately
 		return "", fmt.Errorf("JSON source extraction not implemented in extractFromSource")
-		
+
 	default:
 		return "", fmt.Errorf("unknown source type: %s", sourceType)
 	}
@@ -404,29 +404,29 @@ func (d *CombinedDecoder[T]) extractFromSource(r *http.Request, sourceType Sourc
 func (d *CombinedDecoder[T]) handleSpecialCases(r *http.Request, result *T) error {
 	resultValue := reflect.ValueOf(result).Elem()
 	resultType := resultValue.Type()
-	
+
 	// Check if we need to handle JSON body or file uploads
 	needsJSON := false
 	needsForm := false
-	
+
 	for i := 0; i < resultType.NumField(); i++ {
 		field := resultType.Field(i)
-		
+
 		if field.Tag.Get("json") != "" {
 			needsJSON = true
 		}
-		
+
 		if field.Tag.Get("form") != "" {
 			needsForm = true
 		}
-		
+
 		// Check for file upload fields
 		if field.Type == reflect.TypeOf((*multipart.FileHeader)(nil)) ||
-		   field.Type == reflect.TypeOf([]*multipart.FileHeader{}) {
+			field.Type == reflect.TypeOf([]*multipart.FileHeader{}) {
 			needsForm = true
 		}
 	}
-	
+
 	// Handle JSON body if needed
 	if needsJSON && r.Body != nil && r.ContentLength > 0 {
 		contentType := r.Header.Get("Content-Type")
@@ -436,14 +436,14 @@ func (d *CombinedDecoder[T]) handleSpecialCases(r *http.Request, result *T) erro
 			}
 		}
 	}
-	
+
 	// Handle form data if needed (including file uploads)
 	if needsForm {
 		if formResult, err := d.formDecoder.Decode(r); err == nil {
 			*result = mergeStructs(*result, formResult)
 		}
 	}
-	
+
 	return nil
 }
 
@@ -456,20 +456,20 @@ func (d *CombinedDecoder[T]) ContentTypes() []string {
 func mergeStructs[T any](dst, src T) T {
 	dstValue := reflect.ValueOf(&dst).Elem()
 	srcValue := reflect.ValueOf(src)
-	
+
 	for i := 0; i < dstValue.NumField(); i++ {
 		dstField := dstValue.Field(i)
 		srcField := srcValue.Field(i)
-		
+
 		if !dstField.CanSet() {
 			continue
 		}
-		
+
 		// If source field has a non-zero value, use it
 		if !srcField.IsZero() {
 			dstField.Set(srcField)
 		}
 	}
-	
+
 	return dst
 }

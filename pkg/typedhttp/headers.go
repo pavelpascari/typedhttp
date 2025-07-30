@@ -27,7 +27,7 @@ func NewHeaderDecoder[T any](validator *validator.Validate) *HeaderDecoder[T] {
 // Decode decodes HTTP headers into the target type using reflection.
 func (d *HeaderDecoder[T]) Decode(r *http.Request) (T, error) {
 	var result T
-	
+
 	// Use reflection to map headers to struct fields
 	resultValue := reflect.ValueOf(&result).Elem()
 	resultType := resultValue.Type()
@@ -35,7 +35,7 @@ func (d *HeaderDecoder[T]) Decode(r *http.Request) (T, error) {
 	for i := 0; i < resultType.NumField(); i++ {
 		field := resultType.Field(i)
 		fieldValue := resultValue.Field(i)
-		
+
 		// Skip unexported fields
 		if !fieldValue.CanSet() {
 			continue
@@ -75,7 +75,7 @@ func (d *HeaderDecoder[T]) Decode(r *http.Request) (T, error) {
 			if err != nil {
 				return result, fmt.Errorf("failed to format header %s: %w", headerName, err)
 			}
-			
+
 			// Set the formatted value directly
 			fieldValue.Set(reflect.ValueOf(formattedValue))
 			continue
@@ -114,35 +114,35 @@ func setFieldValueFromString(fieldValue reflect.Value, value string) error {
 	switch fieldValue.Kind() {
 	case reflect.String:
 		fieldValue.SetString(value)
-		
+
 	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
 		intValue, err := strconv.ParseInt(value, 10, 64)
 		if err != nil {
 			return fmt.Errorf("invalid integer value: %s", value)
 		}
 		fieldValue.SetInt(intValue)
-		
+
 	case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64:
 		uintValue, err := strconv.ParseUint(value, 10, 64)
 		if err != nil {
 			return fmt.Errorf("invalid unsigned integer value: %s", value)
 		}
 		fieldValue.SetUint(uintValue)
-		
+
 	case reflect.Float32, reflect.Float64:
 		floatValue, err := strconv.ParseFloat(value, 64)
 		if err != nil {
 			return fmt.Errorf("invalid float value: %s", value)
 		}
 		fieldValue.SetFloat(floatValue)
-		
+
 	case reflect.Bool:
 		boolValue, err := strconv.ParseBool(value)
 		if err != nil {
 			return fmt.Errorf("invalid boolean value: %s", value)
 		}
 		fieldValue.SetBool(boolValue)
-		
+
 	default:
 		// Handle special types
 		if fieldValue.Type() == reflect.TypeOf(net.IP{}) {
@@ -166,7 +166,7 @@ func setFieldValueFromString(fieldValue reflect.Value, value string) error {
 			return fmt.Errorf("unsupported field type: %s", fieldValue.Kind())
 		}
 	}
-	
+
 	return nil
 }
 
@@ -193,20 +193,20 @@ func applyTransformation(transform, value string) (string, error) {
 			return strings.TrimSpace(ips[0]), nil
 		}
 		return value, nil
-		
+
 	case "to_lower":
 		return strings.ToLower(value), nil
-		
+
 	case "to_upper":
 		return strings.ToUpper(value), nil
-		
+
 	case "trim_space":
 		return strings.TrimSpace(value), nil
-		
+
 	case "is_admin":
 		// Transform role to boolean
 		return strconv.FormatBool(strings.ToLower(value) == "admin"), nil
-		
+
 	default:
 		return "", fmt.Errorf("unknown transformation: %s", transform)
 	}
@@ -231,19 +231,19 @@ func parseTimeWithFormat(format, value string) (time.Time, error) {
 			return time.Time{}, fmt.Errorf("invalid unix timestamp: %s", value)
 		}
 		return time.Unix(timestamp, 0), nil
-		
+
 	case "rfc3339":
 		return time.Parse(time.RFC3339, value)
-		
+
 	case "rfc822":
 		return time.Parse(time.RFC822, value)
-		
+
 	case "2006-01-02":
 		return time.Parse("2006-01-02", value)
-		
+
 	case "2006-01-02 15:04:05":
 		return time.Parse("2006-01-02 15:04:05", value)
-		
+
 	default:
 		// Try custom format
 		return time.Parse(format, value)

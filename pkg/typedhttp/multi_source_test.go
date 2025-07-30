@@ -145,7 +145,7 @@ func TestCombinedDecoder_MultiSource(t *testing.T) {
 
 	// Create request with data from multiple sources
 	req, _ := http.NewRequest("GET", "/users/123", nil)
-	
+
 	// Query parameters
 	q := req.URL.Query()
 	q.Add("name", "John Doe")
@@ -153,14 +153,14 @@ func TestCombinedDecoder_MultiSource(t *testing.T) {
 	q.Add("limit", "50")
 	q.Add("trace_id", "query_trace")
 	req.URL.RawQuery = q.Encode()
-	
+
 	// Headers
 	req.Header.Set("Authorization", "Bearer token123")
 	req.Header.Set("X-User-ID", "header_user")
 	req.Header.Set("X-Trace-ID", "header_trace")
 	req.Header.Set("X-Forwarded-For", "192.168.1.100, 10.0.0.1")
 	req.Header.Set("Accept-Language", "fr")
-	
+
 	// Cookies
 	req.AddCookie(&http.Cookie{Name: "session", Value: "sess789"})
 	req.AddCookie(&http.Cookie{Name: "user_id", Value: "cookie_user"})
@@ -170,15 +170,15 @@ func TestCombinedDecoder_MultiSource(t *testing.T) {
 	require.NoError(t, err)
 
 	// Test single source fields
-	assert.Equal(t, "123", result.ID) // from path
-	assert.Equal(t, "John Doe", result.Name) // from query
+	assert.Equal(t, "123", result.ID)               // from path
+	assert.Equal(t, "John Doe", result.Name)        // from query
 	assert.Equal(t, "Bearer token123", result.Auth) // from header
-	assert.Equal(t, "sess789", result.Session) // from cookie
+	assert.Equal(t, "sess789", result.Session)      // from cookie
 
 	// Test multi-source with precedence
-	assert.Equal(t, "header_user", result.UserID) // header wins over cookie
+	assert.Equal(t, "header_user", result.UserID)   // header wins over cookie
 	assert.Equal(t, "header_trace", result.TraceID) // header wins over query
-	assert.Equal(t, "es", result.Language) // cookie wins over header
+	assert.Equal(t, "es", result.Language)          // cookie wins over header
 
 	// Test transformations
 	assert.Equal(t, "192.168.1.100", result.ClientIP.String()) // first_ip transform
@@ -194,11 +194,11 @@ func TestCombinedDecoder_Precedence(t *testing.T) {
 	decoder := NewCombinedDecoder[MultiSourceRequest](validator)
 
 	req, _ := http.NewRequest("GET", "/users/123", nil)
-	
+
 	// Add UserID to both header and cookie
 	req.Header.Set("X-User-ID", "from_header")
 	req.AddCookie(&http.Cookie{Name: "user_id", Value: "from_cookie"})
-	
+
 	// Add TraceID to both header and query (header should win)
 	req.Header.Set("X-Trace-ID", "from_header")
 	q := req.URL.Query()
@@ -210,7 +210,7 @@ func TestCombinedDecoder_Precedence(t *testing.T) {
 
 	// Header should win for UserID (precedence: header,cookie)
 	assert.Equal(t, "from_header", result.UserID)
-	
+
 	// Header should win for TraceID (precedence: header,query)
 	assert.Equal(t, "from_header", result.TraceID)
 }
@@ -220,10 +220,10 @@ func TestCombinedDecoder_Fallback(t *testing.T) {
 	decoder := NewCombinedDecoder[MultiSourceRequest](validator)
 
 	req, _ := http.NewRequest("GET", "/users/123", nil)
-	
+
 	// Only provide cookie for UserID (header missing)
 	req.AddCookie(&http.Cookie{Name: "user_id", Value: "fallback_cookie"})
-	
+
 	// Only provide query for TraceID (header missing)
 	q := req.URL.Query()
 	q.Add("trace_id", "fallback_query")
@@ -234,7 +234,7 @@ func TestCombinedDecoder_Fallback(t *testing.T) {
 
 	// Should fallback to cookie for UserID
 	assert.Equal(t, "fallback_cookie", result.UserID)
-	
+
 	// Should fallback to query for TraceID
 	assert.Equal(t, "fallback_query", result.TraceID)
 }
@@ -249,9 +249,9 @@ func TestCombinedDecoder_DefaultValues(t *testing.T) {
 	require.NoError(t, err)
 
 	// Should use default values when no source provides value
-	assert.Equal(t, "en", result.Language) // default
-	assert.Equal(t, 1, result.Page) // default
-	assert.Equal(t, 20, result.Limit) // default
+	assert.Equal(t, "en", result.Language)     // default
+	assert.Equal(t, 1, result.Page)            // default
+	assert.Equal(t, 20, result.Limit)          // default
 	assert.Equal(t, "created_at", result.Sort) // default
 }
 
@@ -261,10 +261,10 @@ func TestCombinedDecoder_Validation(t *testing.T) {
 
 	req, _ := http.NewRequest("GET", "/users/123", nil)
 	// Missing required UserID
-	
+
 	_, err := decoder.Decode(req)
 	require.Error(t, err)
-	
+
 	validationErr, ok := err.(*ValidationError)
 	require.True(t, ok)
 	assert.Contains(t, validationErr.Fields, "userid")

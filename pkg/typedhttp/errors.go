@@ -153,9 +153,9 @@ func (m *DefaultErrorMapper) MapError(err error) (int, interface{}) {
 	}
 
 	// Handle JSON parse errors as bad requests
-	if strings.Contains(err.Error(), "invalid JSON") || 
-	   strings.Contains(err.Error(), "invalid character") ||
-	   strings.Contains(err.Error(), "unexpected end of JSON") {
+	if strings.Contains(err.Error(), "invalid JSON") ||
+		strings.Contains(err.Error(), "invalid character") ||
+		strings.Contains(err.Error(), "unexpected end of JSON") {
 		return http.StatusBadRequest, ErrorResponse{
 			Error: "Invalid JSON in request body",
 			Code:  "INVALID_JSON",

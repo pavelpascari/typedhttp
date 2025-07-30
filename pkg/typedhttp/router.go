@@ -3,7 +3,7 @@ package typedhttp
 import (
 	"net/http"
 	"reflect"
-	
+
 	"github.com/go-playground/validator/v10"
 )
 
@@ -17,12 +17,12 @@ type Router interface {
 
 // HandlerRegistration stores metadata about a registered handler for OpenAPI generation.
 type HandlerRegistration struct {
-	Method      string
-	Path        string
-	RequestType reflect.Type
+	Method       string
+	Path         string
+	RequestType  reflect.Type
 	ResponseType reflect.Type
-	Metadata    OpenAPIMetadata
-	Config      HandlerConfig
+	Metadata     OpenAPIMetadata
+	Config       HandlerConfig
 }
 
 // HTTPHandler wraps a typed handler with HTTP-specific functionality.
@@ -155,9 +155,9 @@ func (r *TypedRouter) registerHandler(
 		ResponseType: responseType,
 		Metadata:     metadata,
 	}
-	
+
 	r.handlers = append(r.handlers, registration)
-	
+
 	// Register with HTTP mux
 	pattern := method + " " + path
 	r.mux.HandleFunc(pattern, httpHandler.ServeHTTP)
@@ -174,7 +174,7 @@ func RegisterHandler[TReq, TResp any](
 ) {
 	// Create HTTP handler wrapper
 	httpHandler := NewHTTPHandler(handler, opts...)
-	
+
 	// Register with router
 	router.registerHandler(
 		method,

@@ -26,7 +26,7 @@ func NewJSONDecoder[T any](validator *validator.Validate) *JSONDecoder[T] {
 // Decode decodes a JSON request body into the target type.
 func (d *JSONDecoder[T]) Decode(r *http.Request) (T, error) {
 	var result T
-	
+
 	if err := json.NewDecoder(r.Body).Decode(&result); err != nil {
 		return result, fmt.Errorf("invalid JSON: %w", err)
 	}
@@ -69,7 +69,7 @@ func NewQueryDecoder[T any](validator *validator.Validate) *QueryDecoder[T] {
 // Decode decodes query parameters into the target type using reflection.
 func (d *QueryDecoder[T]) Decode(r *http.Request) (T, error) {
 	var result T
-	
+
 	// Use reflection to map query parameters to struct fields
 	resultValue := reflect.ValueOf(&result).Elem()
 	resultType := resultValue.Type()
@@ -77,7 +77,7 @@ func (d *QueryDecoder[T]) Decode(r *http.Request) (T, error) {
 	for i := 0; i < resultType.NumField(); i++ {
 		field := resultType.Field(i)
 		fieldValue := resultValue.Field(i)
-		
+
 		// Skip unexported fields
 		if !fieldValue.CanSet() {
 			continue
@@ -175,7 +175,7 @@ func NewJSONEncoder[T any]() *JSONEncoder[T] {
 func (e *JSONEncoder[T]) Encode(w http.ResponseWriter, data T, statusCode int) error {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(statusCode)
-	
+
 	return json.NewEncoder(w).Encode(data)
 }
 
@@ -208,12 +208,12 @@ func (e *EnvelopeEncoder[T]) Encode(w http.ResponseWriter, data T, statusCode in
 	envelope := EnvelopeResponse[T]{
 		Data: data,
 	}
-	
+
 	// Add request ID if available from context
 	if requestID := w.Header().Get("X-Request-ID"); requestID != "" {
 		envelope.RequestID = requestID
 	}
-	
+
 	return e.encoder.Encode(w, envelope, statusCode)
 }
 

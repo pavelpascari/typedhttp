@@ -11,13 +11,13 @@ import (
 // === Current Implementation (Limited) ===
 
 type CurrentGetUserRequest struct {
-	ID   string `path:"id" validate:"required"`        // Path only
-	Name string `query:"name"`                          // Query only
+	ID   string `path:"id" validate:"required"` // Path only
+	Name string `query:"name"`                  // Query only
 }
 
 type CurrentCreateUserRequest struct {
-	Name  string `json:"name" validate:"required"`     // JSON body only
-	Email string `json:"email" validate:"required"`    // JSON body only
+	Name  string `json:"name" validate:"required"`  // JSON body only
+	Email string `json:"email" validate:"required"` // JSON body only
 }
 
 // === Proposed Enhanced Implementation ===
@@ -46,12 +46,12 @@ type ComplexAPIRequest struct {
 	Fields []string `query:"fields" transform:"comma_split"`
 
 	// === Headers for Metadata ===
-	UserAgent     string    `header:"User-Agent"`
-	ContentType   string    `header:"Content-Type"`
-	AcceptLang    string    `header:"Accept-Language" default:"en"`
-	ClientIP      net.IP    `header:"X-Forwarded-For" transform:"first_ip"`
-	RequestTime   time.Time `header:"X-Request-Time" format:"rfc3339" default:"now"`
-	TraceID       string    `header:"X-Trace-ID" query:"trace_id" precedence:"header,query"`
+	UserAgent   string    `header:"User-Agent"`
+	ContentType string    `header:"Content-Type"`
+	AcceptLang  string    `header:"Accept-Language" default:"en"`
+	ClientIP    net.IP    `header:"X-Forwarded-For" transform:"first_ip"`
+	RequestTime time.Time `header:"X-Request-Time" format:"rfc3339" default:"now"`
+	TraceID     string    `header:"X-Trace-ID" query:"trace_id" precedence:"header,query"`
 
 	// === Form Data (for file uploads or form submissions) ===
 	Name        string                `form:"name" json:"name" validate:"required" precedence:"form,json"`
@@ -61,18 +61,18 @@ type ComplexAPIRequest struct {
 
 	// === JSON Body (for complex structured data) ===
 	Metadata map[string]interface{} `json:"metadata"`
-	Settings UserSettings            `json:"settings"`
-	Filters  SearchFilters           `json:"filters" query:"filter" precedence:"json,query"`
+	Settings UserSettings           `json:"settings"`
+	Filters  SearchFilters          `json:"filters" query:"filter" precedence:"json,query"`
 
 	// === Cookies (for session management) ===
-	Theme      string `cookie:"theme" default:"light"`
-	Language   string `cookie:"lang" header:"Accept-Language" default:"en" precedence:"cookie,header"`
-	CSRF       string `cookie:"csrf_token" header:"X-CSRF-Token" validate:"required" precedence:"header,cookie"`
+	Theme    string `cookie:"theme" default:"light"`
+	Language string `cookie:"lang" header:"Accept-Language" default:"en" precedence:"cookie,header"`
+	CSRF     string `cookie:"csrf_token" header:"X-CSRF-Token" validate:"required" precedence:"header,cookie"`
 
 	// === Computed/Derived Fields ===
-	IsAdmin    bool   `header:"X-User-Role" transform:"is_admin"`
-	Timezone   string `header:"X-Timezone" cookie:"timezone" default:"UTC" precedence:"header,cookie"`
-	RequestID  string `header:"X-Request-ID" default:"generate_uuid"`
+	IsAdmin   bool   `header:"X-User-Role" transform:"is_admin"`
+	Timezone  string `header:"X-Timezone" cookie:"timezone" default:"UTC" precedence:"header,cookie"`
+	RequestID string `header:"X-Request-ID" default:"generate_uuid"`
 }
 
 type UserSettings struct {
@@ -96,21 +96,21 @@ type ComplexAPIHandler struct{}
 
 func (h *ComplexAPIHandler) Handle(ctx context.Context, req ComplexAPIRequest) (ComplexAPIResponse, error) {
 	// Business logic can now access all the rich data without worrying about HTTP concerns
-	
+
 	fmt.Printf("Processing request for user %s\n", req.UserID)
 	fmt.Printf("Resource: %s, Action: %s\n", req.ResourceID, req.Action)
 	fmt.Printf("Client IP: %s, User Agent: %s\n", req.ClientIP, req.UserAgent)
 	fmt.Printf("Pagination: page=%d, limit=%d\n", req.Page, req.Limit)
 	fmt.Printf("Auth method: %s\n", req.Authorization)
-	
+
 	if req.Avatar != nil {
 		fmt.Printf("File upload: %s (%d bytes)\n", req.Avatar.Filename, req.Avatar.Size)
 	}
-	
+
 	if req.Metadata != nil {
 		fmt.Printf("Metadata: %+v\n", req.Metadata)
 	}
-	
+
 	return ComplexAPIResponse{
 		Status:    "success",
 		Message:   "Request processed successfully",
@@ -175,7 +175,7 @@ func demonstrateCapabilities() {
 	fmt.Println("  avatar=<binary file data>")
 	fmt.Println("  metadata={\"priority\": \"high\"}")
 	fmt.Println("")
-	
+
 	fmt.Println("Would be automatically mapped to:")
 	fmt.Println("  ResourceID: 'id' (from path)")
 	fmt.Println("  Action: 'action' (from path)")
@@ -220,7 +220,7 @@ var complexAPIExtractionRules = []EnhancedFieldExtractor{
 		Validate:   "required",
 	},
 	{
-		FieldName:  "TraceID", 
+		FieldName:  "TraceID",
 		Sources:    []DataSource{{"header", "X-Trace-ID"}, {"query", "trace_id"}},
 		Precedence: []string{"header", "query"},
 	},
