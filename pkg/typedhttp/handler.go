@@ -51,12 +51,13 @@ type HandlerOption func(*HandlerConfig)
 
 // HandlerConfig contains all configuration options for a typed handler.
 type HandlerConfig struct {
-	Decoder       interface{} // RequestDecoder[T]
-	Encoder       interface{} // ResponseEncoder[T]
-	ErrorMapper   ErrorMapper
-	Middleware    []Middleware
-	Metadata      OpenAPIMetadata
-	Observability ObservabilityConfig
+	Decoder         interface{} // RequestDecoder[T]
+	Encoder         interface{} // ResponseEncoder[T]
+	ErrorMapper     ErrorMapper
+	Middleware      []Middleware
+	TypedMiddleware []MiddlewareEntry // Typed middleware entries
+	Metadata        OpenAPIMetadata
+	Observability   ObservabilityConfig
 }
 
 // OpenAPIMetadata contains metadata for OpenAPI specification generation.
