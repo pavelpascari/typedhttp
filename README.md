@@ -17,6 +17,7 @@ TypedHTTP is a powerful Go library that brings type safety and declarative reque
 - **✅ Validation**: Seamless integration with `go-playground/validator`
 - **📁 File Uploads**: First-class support for multipart form uploads
 - **📖 OpenAPI Generation**: Automatic OpenAPI 3.0+ specification generation with comment-based documentation
+- **🧪 5/5 Go-Idiomatic Testing**: Comprehensive test utilities with context support, explicit error handling, and zero boilerplate
 - **🎨 Clean APIs**: Declarative struct tags for ergonomic request definition
 - **🔧 Extensible**: Custom decoders, encoders, and middleware support
 
@@ -587,7 +588,116 @@ func main() {
 
 ## 🧪 Testing
 
-TypedHTTP makes testing easy with structured requests:
+TypedHTTP includes **comprehensive 5/5 Go-idiomatic test utilities** that eliminate boilerplate and make HTTP testing a breeze.
+
+### **Built-in Test Utilities**
+
+- 🎯 **Perfect Go Idioms**: Context-aware, explicit error handling, struct-based configuration
+- 🚀 **Zero Boilerplate**: No more manual JSON marshaling, header setting, or response parsing
+- 🔒 **Type-Safe**: Leverages Go generics for compile-time type checking
+- 📝 **Comprehensive Assertions**: Detailed HTTP response validation with excellent error reporting
+- 🎨 **Clean Request Building**: Functional request modifiers for readable test setup
+
+### **Quick Test Example**
+
+```go
+import (
+    "github.com/pavelpascari/typedhttp/pkg/testutil"
+    "github.com/pavelpascari/typedhttp/pkg/testutil/assert"
+    "github.com/pavelpascari/typedhttp/pkg/testutil/client"
+)
+
+func TestUserAPI(t *testing.T) {
+    // Setup
+    router := typedhttp.NewRouter()
+    typedhttp.POST(router, "/users", &CreateUserHandler{})
+    
+    testClient := client.NewClient(router,
+        client.WithTimeout(10*time.Second),
+    )
+
+    t.Run("create user", func(t *testing.T) {
+        // 🎯 Perfect Go-idiomatic request building
+        req := testutil.WithAuth(
+            testutil.WithJSON(
+                testutil.POST("/users", CreateUserRequest{
+                    Name:  "Jane Doe",
+                    Email: "jane@example.com",
+                    Age:   25,
+                }),
+            ),
+            "auth-token",
+        )
+
+        // Context-aware execution with explicit error handling
+        ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+        defer cancel()
+
+        resp, err := testClient.Execute(ctx, req)
+        if err != nil {
+            if testutil.IsRequestError(err) {
+                // Handle request-specific errors
+            }
+            t.Fatalf("Request failed: %v", err)
+        }
+
+        // Comprehensive assertions with detailed error reporting
+        assert.AssertStatusCreated(t, resp)
+        assert.AssertJSONContentType(t, resp)
+        assert.AssertJSONField(t, resp, "name", "Jane Doe")
+        assert.AssertJSONFieldExists(t, resp, "id")
+    })
+}
+```
+
+### **Advanced Testing Features**
+
+```go
+// Type-safe response handling
+resp, err := client.ExecuteTyped[UserResponse](testClient, ctx, req)
+user := resp.Data // Fully typed UserResponse
+
+// File upload testing
+req := testutil.WithFile(
+    testutil.POST("/upload", formData),
+    "file", fileContent,
+)
+
+// Multi-source data testing
+req := testutil.WithCookie(
+    testutil.WithHeaders(
+        testutil.WithPathParams(
+            testutil.GET("/api/{version}/users/{id}"),
+            map[string]string{"version": "v1", "id": "123"},
+        ),
+        map[string]string{"Authorization": "Bearer token"},
+    ),
+    "session", "session-id",
+)
+
+// Validation error testing
+resp, err := testutil.ExecuteExpectingError(t, client, invalidReq)
+assert.AssertStatusBadRequest(t, resp)
+assert.AssertValidationError(t, resp, "email", "required")
+
+// Context and timeout testing
+ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
+defer cancel()
+_, err = client.Execute(ctx, slowReq)
+if errors.Is(err, context.DeadlineExceeded) {
+    t.Log("Request timed out as expected") 
+}
+```
+
+### **Test Utilities Documentation**
+
+- 📖 [Complete Testing Guide](docs/testing-guide.md) - Comprehensive guide with examples
+- 🔧 [Test Utilities API](pkg/testutil/README.md) - Detailed API reference
+- 🎯 [ADR-004: Test Utility Design](docs/adrs/ADR-004-test-utility-package.md) - Design decisions
+
+### **Unit Testing Handlers**
+
+For testing business logic in isolation:
 
 ```go
 func TestOrderHandler(t *testing.T) {
@@ -624,6 +734,8 @@ TypedHTTP follows hexagonal architecture principles:
 ## 📚 Documentation
 
 - [Architecture Decision Records (ADRs)](docs/adrs/) - Design decisions and implementation details
+- [Testing Guide](docs/testing-guide.md) - Comprehensive testing guide with 5/5 Go-idiomatic utilities
+- [Test Utilities API Reference](pkg/testutil/README.md) - Complete test utilities documentation
 - [OpenAPI Generator Guide](docs/adrs/ADR-003-automatic-openapi-generation.md) - Complete OpenAPI generation documentation
 - [API Reference](https://pkg.go.dev/github.com/pavelpascari/typedhttp) - Full API documentation
 - [Examples](examples/) - Working examples including OpenAPI generation
