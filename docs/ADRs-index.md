@@ -7,7 +7,8 @@
 | [ADR-001](./adrs/ADR-001-typed-http-handlers.md) | Typed HTTP Handlers | ✅ **Implemented** | 2024 | Core typed handler architecture with Go generics |
 | [ADR-002](./adrs/ADR-002-request-data-source-annotations.md) | Request Data Source Annotations | ✅ **Implemented** | Jan 2025 | Multi-source request data extraction with precedence rules |
 | [ADR-003](./adrs/ADR-003-automatic-openapi-generation.md) | Automatic OpenAPI Generation | ✅ **Implemented** | Jan 2025 | Automatic OpenAPI 3.0+ spec generation with comment-based documentation |
-| [ADR-004](./adrs/ADR-004-test-utility-package.md) | TypedHTTP Test Utility Package | 📋 **Accepted** | Jan 2025 | Comprehensive test utilities for end-to-end handler testing with fluent APIs |
+| [ADR-004](./adrs/ADR-004-test-utility-package.md) | TypedHTTP Test Utility Package | ✅ **Implemented** | Jan 2025 | Comprehensive test utilities for end-to-end handler testing with fluent APIs |
+| [ADR-005](./adrs/ADR-005-comprehensive-middleware-patterns.md) | Comprehensive Middleware Patterns | 📋 **Proposed** | Jan 2025 | Advanced middleware system with typed middleware, composition utilities, and standard implementations |
 
 ## Implementation Status
 
@@ -24,7 +25,7 @@
 - **5/5 Go-idiomatic test utilities** with context support, explicit error handling, and zero boilerplate
 
 ### 🚧 Future Enhancements
-- Advanced middleware system (planned future ADR)
+- **Comprehensive middleware system** (ADR-005 proposed) - Advanced middleware patterns with type safety
 - Client code generation from OpenAPI specs
 
 ## Quick Reference

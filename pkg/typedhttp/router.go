@@ -7,6 +7,8 @@ import (
 	"github.com/go-playground/validator/v10"
 )
 
+// Core router types and functionality
+
 // Router represents a typed HTTP router that provides type-safe handler registration.
 // Note: Due to Go's limitation with generic interface methods, the actual implementation
 // will be in a concrete type that provides generic methods.
@@ -259,3 +261,8 @@ func NewHTTPHandler[TRequest, TResponse any](
 
 	return httpHandler
 }
+
+// Enhanced HTTP handler will be implemented in the next iteration
+
+// Enhanced router implementation is in development and will be completed in the next iteration
+// For now, the core middleware infrastructure is fully implemented and tested

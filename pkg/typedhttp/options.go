@@ -93,6 +93,48 @@ func WithLogging() HandlerOption {
 	}
 }
 
+// WithTypedPreMiddleware adds a typed pre-middleware to the handler.
+func WithTypedPreMiddleware[TRequest any](middleware TypedPreMiddleware[TRequest]) HandlerOption {
+	return func(cfg *HandlerConfig) {
+		entry := MiddlewareEntry{
+			Middleware: middleware,
+			Config: MiddlewareConfig{
+				Name:  "typed_pre_middleware",
+				Scope: ScopeHandler,
+			},
+		}
+		cfg.TypedMiddleware = append(cfg.TypedMiddleware, entry)
+	}
+}
+
+// WithTypedPostMiddleware adds a typed post-middleware to the handler.
+func WithTypedPostMiddleware[TResponse any](middleware TypedPostMiddleware[TResponse]) HandlerOption {
+	return func(cfg *HandlerConfig) {
+		entry := MiddlewareEntry{
+			Middleware: middleware,
+			Config: MiddlewareConfig{
+				Name:  "typed_post_middleware",
+				Scope: ScopeHandler,
+			},
+		}
+		cfg.TypedMiddleware = append(cfg.TypedMiddleware, entry)
+	}
+}
+
+// WithTypedFullMiddleware adds a typed full middleware to the handler.
+func WithTypedFullMiddleware[TRequest, TResponse any](middleware TypedMiddleware[TRequest, TResponse]) HandlerOption {
+	return func(cfg *HandlerConfig) {
+		entry := MiddlewareEntry{
+			Middleware: middleware,
+			Config: MiddlewareConfig{
+				Name:  "typed_full_middleware",
+				Scope: ScopeHandler,
+			},
+		}
+		cfg.TypedMiddleware = append(cfg.TypedMiddleware, entry)
+	}
+}
+
 // WithTraceAttributes adds custom trace attributes.
 func WithTraceAttributes(attributes map[string]interface{}) HandlerOption {
 	return func(cfg *HandlerConfig) {
