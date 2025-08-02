@@ -1,6 +1,7 @@
 package openapi
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"mime/multipart"
@@ -140,10 +141,20 @@ func (g *Generator) processHandler(spec *openapi3.T, reg *typedhttp.HandlerRegis
 		operation.RequestBody = requestBody
 	}
 
-	// Create response
-	responseSchema, err := g.createResponseSchema(reg.ResponseType)
+	// Create base response schema
+	baseResponseSchema, err := g.createResponseSchema(reg.ResponseType)
 	if err != nil {
 		return fmt.Errorf("failed to create response schema: %w", err)
+	}
+
+	// Apply middleware schema transformations
+	finalResponseSchema, err := g.applyMiddlewareSchemaTransformations(
+		context.Background(),
+		reg.MiddlewareEntries,
+		baseResponseSchema,
+	)
+	if err != nil {
+		return fmt.Errorf("failed to apply middleware schema transformations: %w", err)
 	}
 
 	statusCode := "200"
@@ -158,11 +169,16 @@ func (g *Generator) processHandler(spec *openapi3.T, reg *typedhttp.HandlerRegis
 			Description: &description,
 			Content: map[string]*openapi3.MediaType{
 				"application/json": {
-					Schema: responseSchema,
+					Schema: finalResponseSchema,
 				},
 			},
 		},
 	})
+
+	// Add error responses if envelope middleware is present
+	if g.hasEnvelopeMiddleware(reg.MiddlewareEntries) {
+		g.addEnvelopeErrorResponses(operation)
+	}
 
 	// Assign operation to method
 	switch reg.Method {
@@ -661,4 +677,130 @@ func (g *Generator) GenerateYAML(spec *openapi3.T) ([]byte, error) {
 	}
 
 	return data, nil
+}
+
+// applyMiddlewareSchemaTransformations applies middleware schema transformations to the base response schema.
+func (g *Generator) applyMiddlewareSchemaTransformations(
+	ctx context.Context,
+	entries []typedhttp.MiddlewareEntry,
+	baseSchema *openapi3.SchemaRef,
+) (*openapi3.SchemaRef, error) {
+	currentSchema := baseSchema
+
+	// Apply transformations in middleware execution order
+	// Post-middleware runs in reverse order, so we apply transformations in reverse
+	for i := len(entries) - 1; i >= 0; i-- {
+		entry := entries[i]
+		if modifier, ok := entry.Middleware.(typedhttp.ResponseSchemaModifier); ok {
+			transformedSchema, err := modifier.ModifyResponseSchema(ctx, currentSchema)
+			if err != nil {
+				return nil, fmt.Errorf("middleware %q failed to modify schema: %w",
+					entry.Config.Name, err)
+			}
+			currentSchema = transformedSchema
+		}
+	}
+
+	return currentSchema, nil
+}
+
+// hasEnvelopeMiddleware checks if the middleware chain contains envelope middleware.
+func (g *Generator) hasEnvelopeMiddleware(entries []typedhttp.MiddlewareEntry) bool {
+	for _, entry := range entries {
+		// Check if middleware is a response envelope middleware
+		if _, ok := entry.Middleware.(*typedhttp.ResponseEnvelopeMiddleware[any]); ok {
+			return true
+		}
+		// Check for interface implementation
+		if _, ok := entry.Middleware.(interface {
+			ModifyResponseSchema(context.Context, *openapi3.SchemaRef) (*openapi3.SchemaRef, error)
+		}); ok {
+			// This is a basic check - could be enhanced to specifically detect envelope patterns
+			return true
+		}
+	}
+	return false
+}
+
+// addEnvelopeErrorResponses adds standard error responses for envelope middleware.
+func (g *Generator) addEnvelopeErrorResponses(operation *openapi3.Operation) {
+	// Standard envelope error schema
+	errorEnvelopeSchema := &openapi3.SchemaRef{
+		Value: &openapi3.Schema{
+			Type:        &openapi3.Types{"object"},
+			Description: "Error response envelope",
+			Properties: map[string]*openapi3.SchemaRef{
+				"data": {
+					Value: &openapi3.Schema{
+						Type:     &openapi3.Types{"null"},
+						Nullable: true,
+					},
+				},
+				"error": {
+					Value: &openapi3.Schema{
+						Type:        &openapi3.Types{"string"},
+						Description: "Error message",
+					},
+				},
+				"success": {
+					Value: &openapi3.Schema{
+						Type:    &openapi3.Types{"boolean"},
+						Enum:    []interface{}{false},
+						Default: false,
+					},
+				},
+			},
+			Required: []string{"success", "error"},
+		},
+	}
+
+	// Add error responses
+	operation.Responses.Set("400", &openapi3.ResponseRef{
+		Value: &openapi3.Response{
+			Description: stringPtr("Bad Request"),
+			Content: map[string]*openapi3.MediaType{
+				"application/json": {
+					Schema: errorEnvelopeSchema,
+				},
+			},
+		},
+	})
+
+	operation.Responses.Set("401", &openapi3.ResponseRef{
+		Value: &openapi3.Response{
+			Description: stringPtr("Unauthorized"),
+			Content: map[string]*openapi3.MediaType{
+				"application/json": {
+					Schema: errorEnvelopeSchema,
+				},
+			},
+		},
+	})
+
+	operation.Responses.Set("404", &openapi3.ResponseRef{
+		Value: &openapi3.Response{
+			Description: stringPtr("Not Found"),
+			Content: map[string]*openapi3.MediaType{
+				"application/json": {
+					Schema: errorEnvelopeSchema,
+				},
+			},
+		},
+	})
+
+	operation.Responses.Set("500", &openapi3.ResponseRef{
+		Value: &openapi3.Response{
+			Description: stringPtr("Internal Server Error"),
+			Content: map[string]*openapi3.MediaType{
+				"application/json": {
+					Schema: errorEnvelopeSchema,
+				},
+			},
+		},
+	})
+}
+
+// stringPtr returns a pointer to a string value.
+func stringPtr(s string) *string {
+	return &s
 }

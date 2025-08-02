@@ -6,6 +6,9 @@
 [![Go Report Card](https://goreportcard.com/badge/github.com/pavelpascari/typedhttp)](https://goreportcard.com/report/github.com/pavelpascari/typedhttp)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
+> Disclaimer: Code is not production read - use at your own risk.
+
+
 TypedHTTP is a powerful Go library that brings type safety and declarative request handling to HTTP APIs. Extract data from multiple HTTP sources (path, query, headers, cookies, forms, JSON) with configurable precedence rules, transformations, validation, and **automatic OpenAPI 3.0+ specification generation**.
 
 ## 🚀 Key Features

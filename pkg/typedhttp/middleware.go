@@ -5,6 +5,8 @@ import (
 	"net/http"
 	"sort"
 	"sync"
+
+	"github.com/getkin/kin-openapi/openapi3"
 )
 
 // Typed middleware interfaces for different phases
@@ -23,6 +25,25 @@ type TypedPostMiddleware[TResponse any] interface {
 type TypedMiddleware[TRequest, TResponse any] interface {
 	Before(ctx context.Context, req *TRequest) (context.Context, error)
 	After(ctx context.Context, req *TRequest, resp *TResponse, err error) (*TResponse, error)
+}
+
+// ResponseSchemaModifier allows middleware to modify response schemas for OpenAPI generation.
+// Middleware implementing this interface can declare how they transform the response structure
+// to ensure OpenAPI specifications accurately reflect the actual API responses.
+type ResponseSchemaModifier interface {
+	ModifyResponseSchema(ctx context.Context, originalSchema *openapi3.SchemaRef) (*openapi3.SchemaRef, error)
+}
+
+// SchemaAwarePostMiddleware combines response transformation with schema modification for OpenAPI generation.
+type SchemaAwarePostMiddleware[TResponse any] interface {
+	TypedPostMiddleware[TResponse]
+	ResponseSchemaModifier
+}
+
+// SchemaAwareMiddleware combines full middleware lifecycle with schema modification for OpenAPI generation.
+type SchemaAwareMiddleware[TRequest, TResponse any] interface {
+	TypedMiddleware[TRequest, TResponse]
+	ResponseSchemaModifier
 }
 
 // ConditionalFunc determines whether middleware should execute for a given request.
