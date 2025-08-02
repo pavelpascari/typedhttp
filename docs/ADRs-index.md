@@ -9,6 +9,7 @@
 | [ADR-003](./adrs/ADR-003-automatic-openapi-generation.md) | Automatic OpenAPI Generation | ✅ **Implemented** | Jan 2025 | Automatic OpenAPI 3.0+ spec generation with comment-based documentation |
 | [ADR-004](./adrs/ADR-004-test-utility-package.md) | TypedHTTP Test Utility Package | ✅ **Implemented** | Jan 2025 | Comprehensive test utilities for end-to-end handler testing with fluent APIs |
 | [ADR-005](./adrs/ADR-005-comprehensive-middleware-patterns.md) | Comprehensive Middleware Patterns | 📋 **Proposed** | Jan 2025 | Advanced middleware system with typed middleware, composition utilities, and standard implementations |
+| [ADR-006](./adrs/ADR-006-middleware-response-schema-modification.md) | Middleware Response Schema Modification | ✅ **Implemented** | Jan 2025 | Enable middleware to modify OpenAPI response schemas for accurate documentation |
 
 ## Implementation Status
 
@@ -23,6 +24,7 @@
 - **OpenAPI automatic generation** with comment-based documentation
 - **JSON and YAML spec output** with HTTP server endpoints
 - **5/5 Go-idiomatic test utilities** with context support, explicit error handling, and zero boilerplate
+- **Middleware response schema modification** for accurate OpenAPI documentation with envelope middleware
 
 ### 🚧 Future Enhancements
 - **Comprehensive middleware system** (ADR-005 proposed) - Advanced middleware patterns with type safety
