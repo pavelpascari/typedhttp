@@ -19,12 +19,13 @@ type Router interface {
 
 // HandlerRegistration stores metadata about a registered handler for OpenAPI generation.
 type HandlerRegistration struct {
-	Method       string
-	Path         string
-	RequestType  reflect.Type
-	ResponseType reflect.Type
-	Metadata     OpenAPIMetadata
-	Config       HandlerConfig
+	Method            string
+	Path              string
+	RequestType       reflect.Type
+	ResponseType      reflect.Type
+	Metadata          OpenAPIMetadata
+	Config            HandlerConfig
+	MiddlewareEntries []MiddlewareEntry
 }
 
 // HTTPHandler wraps a typed handler with HTTP-specific functionality.
@@ -154,11 +155,12 @@ func (r *TypedRouter) registerHandler(
 ) {
 	// Store registration metadata
 	registration := HandlerRegistration{
-		Method:       method,
-		Path:         path,
-		RequestType:  requestType,
-		ResponseType: responseType,
-		Metadata:     *metadata,
+		Method:            method,
+		Path:              path,
+		RequestType:       requestType,
+		ResponseType:      responseType,
+		Metadata:          *metadata,
+		MiddlewareEntries: []MiddlewareEntry{}, // TODO: Extract from HandlerConfig when implemented
 	}
 
 	r.handlers = append(r.handlers, registration)
