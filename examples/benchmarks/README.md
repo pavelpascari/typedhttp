@@ -1,23 +1,29 @@
 # 📊 TypedHTTP Performance Benchmarks
 
-Comprehensive performance comparison between TypedHTTP and popular Go HTTP frameworks.
+⚠️ **Important**: These are preliminary, internal benchmarks and have not been independently verified. For production decisions, please conduct your own testing in your specific environment.
 
-## Benchmark Results Summary
+Internal performance comparison between TypedHTTP and popular Go HTTP frameworks.
 
-| Framework | Requests/sec | Memory/req | Lines of Code | Type Safety | Auto Docs |
+## Preliminary Benchmark Results
+
+⚠️ **Disclaimer**: These results are from internal testing only and should not be used for production decisions. Results may vary significantly in different environments.
+
+| Framework | Requests/sec* | Memory/req* | Lines of Code | Type Safety | Auto Docs |
 |-----------|--------------|------------|---------------|-------------|-----------|
-| **TypedHTTP** | **47,892** | **2.3KB** | **52 lines** | ✅ | ✅ |
-| Gin | 50,234 | 2.1KB | 98 lines | ❌ | ❌ |
-| Echo | 48,932 | 2.2KB | 85 lines | ❌ | ❌ |
-| Chi | 49,102 | 2.0KB | 76 lines | ❌ | ❌ |
-| net/http | 51,023 | 1.9KB | 120+ lines | ❌ | ❌ |
+| **TypedHTTP** | **~47k** | **~2.3KB** | **52 lines** | ✅ | ✅ |
+| Gin | ~50k | ~2.1KB | 98 lines | ❌ | ❌ |
+| Echo | ~49k | ~2.2KB | 85 lines | ❌ | ❌ |
+| Chi | ~49k | ~2.0KB | 76 lines | ❌ | ❌ |
+| net/http | ~51k | ~1.9KB | 120+ lines | ❌ | ❌ |
 
-**Key Insights:**
-- 📈 **Performance**: TypedHTTP delivers 94-98% of framework performance while adding type safety
-- 🧠 **Memory**: Only 0.2-0.4KB additional memory overhead for type safety features
-- 📝 **Code Reduction**: 47-57% less code required for equivalent functionality
-- 🔒 **Type Safety**: Compile-time guarantees prevent runtime errors
-- 📚 **Documentation**: Automatic OpenAPI generation always up-to-date
+*Results from single-machine testing only
+
+**Key Observations:**
+- 📈 **Performance**: TypedHTTP appears to perform comparably to other frameworks in our limited testing
+- 🧠 **Memory**: Small additional memory overhead for type safety features
+- 📝 **Code Reduction**: Potentially less code required for equivalent functionality
+- 🔒 **Type Safety**: Compile-time guarantees may prevent runtime errors
+- 📚 **Documentation**: Automatic OpenAPI generation
 
 ## Detailed Benchmarks
 
@@ -75,10 +81,10 @@ BenchmarkEcho_JSONPost-12       23756  50.5 μs/op  4.1 KB/op  20 allocs/op
 - Direct function testing (no HTTP mocking needed)
 - 50%+ code reduction
 
-**Performance Overhead:**
-- ~5% slower than pure frameworks (still 47k+ req/sec)
-- ~400-600 bytes additional memory per request
-- Slight compilation time increase due to generics
+**Potential Performance Trade-offs:**
+- Small performance overhead compared to minimal frameworks (needs independent verification)
+- Additional memory usage for type safety features
+- Compilation time increase due to generics
 
 ### Real-World Performance Impact
 
@@ -187,17 +193,16 @@ var responsePool = sync.Pool{
 
 ### When to Choose TypedHTTP
 
-**Choose TypedHTTP when:**
-- Type safety is important (most production APIs)
-- Team has 5+ developers
+**Consider TypedHTTP for experimentation when:**
+- Type safety is important
+- Team values development productivity
 - API documentation is critical
-- Development speed matters more than 5% performance
-- Testing complexity is a concern
+- You want to explore type-safe HTTP patterns
 
-**Choose alternatives when:**
-- Maximum performance is critical (>50k req/sec required)
-- Team is very small (1-2 developers)
-- Simple API with minimal validation needs
+**Stick with proven frameworks when:**
+- Maximum performance is critical
+- Production system requiring stability
+- Team prefers battle-tested solutions
 - Legacy codebase with deep framework integration
 
 ## Benchmark Methodology
@@ -225,16 +230,16 @@ All benchmark implementations are equivalent in functionality:
 
 ## Conclusions
 
-TypedHTTP delivers **94-98% of framework performance** while providing:
-- ✅ **Type Safety**: Eliminate runtime errors
-- ✅ **Developer Productivity**: 50% less code
+In our limited internal testing, TypedHTTP appears to provide:
+- ✅ **Type Safety**: Potential to eliminate runtime errors
+- ✅ **Developer Productivity**: May reduce boilerplate code
 - ✅ **Automatic Documentation**: Always up-to-date OpenAPI specs
 - ✅ **Better Testing**: Direct function testing
 - ✅ **Team Scalability**: Clear patterns for large teams
 
-The **5-6% performance overhead** is insignificant compared to the development velocity gains and elimination of runtime errors.
+⚠️ **Important**: These benefits need validation through independent testing and real-world usage before production adoption.
 
-For most production APIs, TypedHTTP provides the best balance of **performance, safety, and productivity**.
+**Next Steps**: We plan to submit to TechEmpower benchmarks for independent validation.
 
 ---
 

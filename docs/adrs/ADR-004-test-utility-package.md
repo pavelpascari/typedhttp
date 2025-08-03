@@ -2,7 +2,8 @@
 
 ## Status
 
-**Accepted - 5/5 Go Idiomatic** - January 2025
+**Accepted** - Implemented ✅
+**Implementation Date**: July 2025
 
 > **Note**: This ADR has been revised to achieve perfect Go idiomaticity (5/5 score) based on the [Go Idiom Review](../reviews/ADR-004-go-idiom-review.md). The design now exemplifies Go best practices with context support, focused interfaces, proper error handling, and organized package structure.
 
@@ -189,48 +190,48 @@ func WithQueryParams(req Request, params map[string]string) Request {
 package testutil
 
 import (
-    "fmt"
-    "errors"
+	"errors"
+	"fmt"
 )
 
 // Custom error types for better error handling
 type RequestError struct {
-    Method string
-    Path   string
-    Err    error
+	Method string
+	Path   string
+	Err    error
 }
 
 func (e *RequestError) Error() string {
-    return fmt.Sprintf("request %s %s failed: %v", e.Method, e.Path, e.Err)
+	return fmt.Sprintf("request %s %s failed: %v", e.Method, e.Path, e.Err)
 }
 
-func (e *RequestError) Unwrap() error { 
-    return e.Err 
+func (e *RequestError) Unwrap() error {
+	return e.Err
 }
 
 type ValidationError struct {
-    Field   string
-    Message string
-    Err     error
+	Field   string
+	Message string
+	Err     error
 }
 
 func (e *ValidationError) Error() string {
-    return fmt.Sprintf("validation failed for field %q: %s", e.Field, e.Message)
+	return fmt.Sprintf("validation failed for field %q: %s", e.Field, e.Message)
 }
 
-func (e *ValidationError) Unwrap() error { 
-    return e.Err 
+func (e *ValidationError) Unwrap() error {
+	return e.Err
 }
 
 // Error checking helpers
 func IsRequestError(err error) bool {
-    var reqErr *RequestError
-    return errors.As(err, &reqErr)
+	var reqErr *RequestError
+	return errors.As(err, &reqErr)
 }
 
 func IsValidationError(err error) bool {
-    var valErr *ValidationError
-    return errors.As(err, &valErr)
+	var valErr *ValidationError
+	return errors.As(err, &valErr)
 }
 ```
 

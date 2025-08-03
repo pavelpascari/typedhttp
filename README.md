@@ -1,83 +1,38 @@
 # TypedHTTP
 
-> **Production-ready** type-safe HTTP handlers for Go achieving **82-84% of framework performance** with zero configuration
+> Type-safe HTTP handlers for Go with multi-source request data extraction and automatic OpenAPI generation
 
 [![Go Reference](https://pkg.go.dev/badge/github.com/pavelpascari/typedhttp.svg)](https://pkg.go.dev/github.com/pavelpascari/typedhttp)
 [![Go Report Card](https://goreportcard.com/badge/github.com/pavelpascari/typedhttp)](https://goreportcard.com/report/github.com/pavelpascari/typedhttp)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
-> **Disclosure:** This codebase was primarily developed using [Claude Code](https://claude.ai/code) with human oversight and validation.
+⚠️ **Project Status**: This is an experimental framework in active development. Not recommended for production use. [Read full project status →](docs/PROJECT-STATUS.md)
 
-**TypedHTTP achieves 82-84% of leading framework performance while providing compile-time safety and automatic validation.** No more runtime JSON errors, missing validation, or manual OpenAPI docs.
 
----
+TypedHTTP is an experimental Go library exploring type safety and declarative request handling for HTTP APIs. Extract data from multiple HTTP sources (path, query, headers, cookies, forms, JSON) with configurable precedence rules, transformations, validation, and **automatic OpenAPI 3.0+ specification generation**.
 
-## 🚀 **5-Minute Quickstart** → [Get Started](#quickstart)
+## 🚀 Key Features
 
-```go
-// ✅ 25 lines → Full type-safe API with validation
-func main() {
-    router := typedhttp.NewRouter()
-    typedhttp.GET(router, "/users/{id}", &GetUserHandler{})
-    http.ListenAndServe(":8080", router)
-}
-```
+- **🔒 Type Safety**: Leverage Go generics for compile-time type checking
+- **🎯 Multi-Source Extraction**: Get data from path, query, headers, cookies, forms, and JSON body
+- **⚡ Precedence Rules**: Define fallback order when data exists in multiple sources  
+- **🔄 Transformations**: Built-in data transformations (IP extraction, case conversion, etc.)
+- **✅ Validation**: Seamless integration with `go-playground/validator`
+- **📁 File Uploads**: First-class support for multipart form uploads
+- **📖 OpenAPI Generation**: Automatic OpenAPI 3.0+ specification generation with comment-based documentation
+- **🧪 Testing Utilities**: Test utilities with context support and explicit error handling
+- **🎨 Clean APIs**: Declarative struct tags for ergonomic request definition
+- **🔧 Extensible**: Custom decoders, encoders, and middleware support
 
-**Perfect for:** First evaluation, proof of concept, getting started
-
----
-
-## 🎯 **30-Minute Deep Dive** → [Learn More](#fundamentals)
-
-```go
-// ✅ Multi-source data, file uploads, comprehensive validation
-type ComplexRequest struct {
-    ID     string `path:"id" validate:"required,uuid"`
-    Search string `query:"q" validate:"required"`
-    Auth   string `header:"Authorization" validate:"required"`
-    File   *multipart.FileHeader `form:"document"`
-}
-```
-
-**Perfect for:** Understanding TypedHTTP patterns, migration planning
-
----
-
-## 🏢 **Production Ready** → [Deploy](#production)
-
-- **Performance**: 82-84% of Gin/Echo speed with full type safety
-- **Validation**: Zero runtime errors with compile-time guarantees  
-- **OpenAPI**: Automatic documentation generation
-- **Testing**: Built-in test utilities for 5/5 Go-idiomatic testing
-- **Deployment**: Docker, Kubernetes, monitoring examples
-
-**Perfect for:** Production APIs, enterprise applications, teams requiring type safety
-
----
-
-## Table of Contents
-
-- [🚀 5-Minute Quickstart](#quickstart)
-- [📚 Learning Path](#learning-path)
-- [⚡ Performance](#performance)
-- [🎯 Core Features](#core-features)
-- [📖 OpenAPI Generation](#openapi)
-- [🧪 Testing](#testing)
-- [🔧 Migration](#migration)
-- [🏢 Production Deployment](#production)
-- [📚 Documentation](#documentation)
-
----
-
-## 🚀 5-Minute Quickstart {#quickstart}
-
-### Installation
+## 📦 Installation
 
 ```bash
 go get github.com/pavelpascari/typedhttp
 ```
 
-### Hello World
+## 🎯 Quick Start
+
+### Basic Usage
 
 ```go
 package main
@@ -85,120 +40,446 @@ package main
 import (
     "context"
     "net/http"
+
     "github.com/pavelpascari/typedhttp/pkg/typedhttp"
 )
 
-// 1. Define your request/response types
+// Define your request structure with typed fields
 type GetUserRequest struct {
-    ID string `path:"id" validate:"required"`
+    ID   string `path:"id" validate:"required,uuid"`
+    Page int    `query:"page" default:"1" validate:"min=1"`
 }
 
-type User struct {
+type GetUserResponse struct {
     ID   string `json:"id"`
     Name string `json:"name"`
+    Page int    `json:"page"`
 }
 
-// 2. Implement your handler
-type GetUserHandler struct{}
+// Implement your business logic
+type UserHandler struct{}
 
-func (h *GetUserHandler) Handle(ctx context.Context, req GetUserRequest) (User, error) {
-    return User{ID: req.ID, Name: "Hello " + req.ID}, nil
+func (h *UserHandler) Handle(ctx context.Context, req GetUserRequest) (GetUserResponse, error) {
+    return GetUserResponse{
+        ID:   req.ID,
+        Name: "John Doe",
+        Page: req.Page,
+    }, nil
 }
 
-// 3. Register and serve
 func main() {
     router := typedhttp.NewRouter()
-    typedhttp.GET(router, "/users/{id}", &GetUserHandler{})
+    
+    // Register type-safe handlers
+    typedhttp.GET(router, "/users/{id}", &UserHandler{})
+    
     http.ListenAndServe(":8080", router)
 }
 ```
 
-**Test it:**
-```bash
-curl http://localhost:8080/users/123
-# {"id":"123","name":"Hello 123"}
-```
+## 🎨 Multi-Source Data Extraction
 
-**✅ What you just got for free:**
-- ✅ Automatic path parameter extraction and validation
-- ✅ Type-safe request/response handling  
-- ✅ JSON encoding/decoding
-- ✅ Error handling with proper HTTP status codes
-- ✅ Zero configuration required
+The real power of TypedHTTP lies in its ability to extract data from multiple HTTP sources with intelligent precedence rules:
 
-➡️ **Next step:** [Try the fundamentals example](#fundamentals) for real-world patterns
-
----
-
-## 📚 Learning Path
-
-### 🎯 **Choose your journey:**
-
-| Time Investment | Use Case | Example |
-|----------------|----------|---------|
-| **5 minutes** | Quick evaluation | [→ Quickstart](#quickstart) |
-| **30 minutes** | Real-world patterns | [→ Fundamentals](#fundamentals) |
-| **2 hours** | Migration planning | [→ Migration Guide](#migration) |
-| **Half day** | Production deployment | [→ Production Setup](#production) |
-
-### 🔗 **Hands-on Examples:**
-
-- **[examples/01-quickstart/](examples/01-quickstart/)** - 25-line instant success
-- **[examples/02-fundamentals/](examples/02-fundamentals/)** - Complete CRUD with testing
-- **[examples/migration/from-gin/](examples/migration/from-gin/)** - Side-by-side migration
-- **[examples/benchmarks/](examples/benchmarks/)** - Performance comparisons
-
----
-
-## ⚡ Performance {#performance}
-
-TypedHTTP delivers **production-grade performance** while maintaining full type safety:
-
-### **Benchmark Results**
-
-| Framework | GET Request | POST Request | Performance |
-|-----------|-------------|--------------|-------------|
-| **TypedHTTP** | 4,510 ns/op | 7,061 ns/op | **82-84% relative** |
-| Gin | 3,675 ns/op | 5,948 ns/op | 82% relative |
-| Echo | 3,843 ns/op | 5,883 ns/op | 84% relative |
-
-**TypedHTTP achieves 82-84% of leading framework performance** with:
-- ✅ **Zero runtime type errors** (compile-time safety)
-- ✅ **Automatic validation** (no manual checks)
-- ✅ **Built-in OpenAPI generation** (no manual docs)
-
-[**→ View detailed performance analysis**](examples/benchmarks/PERFORMANCE-OPTIMIZATION-RESULTS.md)
-
----
-
-## 🎯 Core Features {#core-features}
-
-### **Multi-Source Data Extraction**
-
-Extract data from multiple HTTP sources with precedence rules:
+### Authentication & Headers
 
 ```go
 type APIRequest struct {
-    // Path parameters
-    ID string `path:"id" validate:"required,uuid"`
+    // Multi-source authentication - header takes precedence
+    UserID    string `header:"X-User-ID" cookie:"user_id" precedence:"header,cookie"`
+    AuthToken string `header:"Authorization" cookie:"auth_token" precedence:"header,cookie"`
     
-    // Query with defaults
-    Page int `query:"page" default:"1" validate:"min=1"`
+    // Client information with transformations
+    ClientIP  net.IP `header:"X-Forwarded-For" transform:"first_ip"`
+    UserAgent string `header:"User-Agent"`
     
-    // Headers with precedence (header preferred over cookie)
-    UserID string `header:"X-User-ID" cookie:"user_id" precedence:"header,cookie"`
-    
-    // JSON body
-    Data map[string]interface{} `json:"data"`
-    
-    // File uploads
-    Avatar *multipart.FileHeader `form:"avatar"`
+    // Language preference - cookie overrides header
+    Language  string `cookie:"lang" header:"Accept-Language" default:"en" precedence:"cookie,header"`
 }
 ```
 
-### **Built-in Validation**
+### Complex Request Handling
 
-Leverage `go-playground/validator` for comprehensive validation:
+```go
+type ComplexAPIRequest struct {
+    // Path parameters
+    ResourceID string `path:"id" validate:"required,uuid"`
+    Action     string `path:"action" validate:"required,oneof=view edit delete"`
+    
+    // Query parameters with defaults and validation
+    Page   int      `query:"page" default:"1" validate:"min=1"`
+    Limit  int      `query:"limit" default:"20" validate:"min=1,max=100"`
+    Fields []string `query:"fields" transform:"comma_split"`
+    
+    // Headers with transformations
+    TraceID   string    `header:"X-Trace-ID" query:"trace_id" precedence:"header,query"`
+    RequestID string    `header:"X-Request-ID" default:"generate_uuid"`
+    Timestamp time.Time `header:"X-Timestamp" format:"rfc3339" default:"now"`
+    
+    // Form data (for POST/PUT requests)
+    Name        string                `form:"name" json:"name" precedence:"form,json"`
+    Email       string                `form:"email" json:"email" validate:"email" precedence:"form,json"`
+    Avatar      *multipart.FileHeader `form:"avatar"`
+    
+    // JSON body for complex data
+    Metadata map[string]interface{} `json:"metadata"`
+    Settings UserSettings            `json:"settings"`
+    
+    // Cookies for session management
+    SessionID string `cookie:"session_id" validate:"required"`
+    Theme     string `cookie:"theme" default:"light"`
+}
+
+type UserSettings struct {
+    Notifications bool   `json:"notifications"`
+    Privacy       string `json:"privacy"`
+}
+```
+
+## 📖 Automatic OpenAPI Generation
+
+TypedHTTP automatically generates comprehensive OpenAPI 3.0+ specifications from your typed handlers and request/response types, with zero manual maintenance required.
+
+### Quick Start with OpenAPI
+
+```go
+package main
+
+import (
+    "context"
+    "fmt"
+    "log"
+    "mime/multipart"
+    "net/http"
+    
+    "github.com/pavelpascari/typedhttp/pkg/openapi"
+    "github.com/pavelpascari/typedhttp/pkg/typedhttp"
+)
+
+// Request types with OpenAPI comment documentation
+type GetUserRequest struct {
+    //openapi:description=User unique identifier,example=123e4567-e89b-12d3-a456-426614174000
+    ID string `path:"id" validate:"required,uuid"`
+
+    //openapi:description=Comma-separated list of fields to return,example=id,name,email
+    Fields string `query:"fields" default:"id,name,email"`
+
+    //openapi:description=Authorization bearer token
+    Auth string `header:"Authorization" validate:"required"`
+}
+
+type GetUserResponse struct {
+    //openapi:description=User unique identifier
+    ID string `json:"id" validate:"required,uuid"`
+
+    //openapi:description=User full name
+    Name string `json:"name" validate:"required"`
+
+    //openapi:description=User email address
+    Email string `json:"email,omitempty" validate:"omitempty,email"`
+}
+
+type CreateUserRequest struct {
+    //openapi:description=User full name,example=John Doe
+    Name string `json:"name" validate:"required,min=2,max=50"`
+
+    //openapi:description=User email address,example=john@example.com
+    Email string `json:"email" validate:"required,email"`
+
+    //openapi:description=User profile picture,type=file,format=binary
+    Avatar *multipart.FileHeader `form:"avatar"`
+}
+
+type CreateUserResponse struct {
+    //openapi:description=Created user unique identifier
+    ID string `json:"id" validate:"required,uuid"`
+
+    //openapi:description=User full name
+    Name string `json:"name"`
+
+    //openapi:description=User email address
+    Email string `json:"email"`
+
+    //openapi:description=Creation timestamp
+    CreatedAt string `json:"created_at"`
+}
+
+// Handlers
+type GetUserHandler struct{}
+
+func (h *GetUserHandler) Handle(ctx context.Context, req GetUserRequest) (GetUserResponse, error) {
+    return GetUserResponse{
+        ID:    req.ID,
+        Name:  "John Doe",
+        Email: "john@example.com",
+    }, nil
+}
+
+type CreateUserHandler struct{}
+
+func (h *CreateUserHandler) Handle(ctx context.Context, req CreateUserRequest) (CreateUserResponse, error) {
+    return CreateUserResponse{
+        ID:        "123e4567-e89b-12d3-a456-426614174000",
+        Name:      req.Name,
+        Email:     req.Email,
+        CreatedAt: "2025-01-30T12:00:00Z",
+    }, nil
+}
+
+func main() {
+    // Create router and register handlers
+    router := typedhttp.NewRouter()
+    typedhttp.GET(router, "/users/{id}", &GetUserHandler{})
+    typedhttp.POST(router, "/users", &CreateUserHandler{})
+
+    // Create OpenAPI generator
+    generator := openapi.NewGenerator(openapi.Config{
+        Info: openapi.Info{
+            Title:       "User Management API",
+            Version:     "1.0.0",
+            Description: "A simple API for managing users with automatic OpenAPI generation",
+        },
+        Servers: []openapi.Server{
+            {URL: "http://localhost:8080", Description: "Development server"},
+        },
+    })
+
+    // Generate OpenAPI specification
+    spec, err := generator.Generate(router)
+    if err != nil {
+        log.Fatalf("Failed to generate OpenAPI spec: %v", err)
+    }
+
+    // Generate JSON and YAML output
+    jsonData, _ := generator.GenerateJSON(spec)
+    yamlData, _ := generator.GenerateYAML(spec)
+
+    fmt.Printf("Generated OpenAPI spec with %d paths\n", len(spec.Paths.Map()))
+
+    // Serve OpenAPI documentation endpoints
+    http.Handle("/openapi.json", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+        w.Header().Set("Content-Type", "application/json")
+        w.Write(jsonData)
+    }))
+
+    http.Handle("/openapi.yaml", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+        w.Header().Set("Content-Type", "application/x-yaml")
+        w.Write(yamlData)
+    }))
+
+    // Serve the API
+    http.Handle("/", router)
+    log.Println("Server starting on :8080")
+    log.Println("OpenAPI JSON: http://localhost:8080/openapi.json")
+    log.Println("OpenAPI YAML: http://localhost:8080/openapi.yaml")
+    
+    http.ListenAndServe(":8080", nil)
+}
+```
+
+### Comment-Based Documentation
+
+TypedHTTP uses clean comment-based documentation instead of verbose struct tags:
+
+```go
+type APIRequest struct {
+    // ✅ Clean separation of concerns
+    //openapi:description=User unique identifier,example=123e4567-e89b-12d3-a456-426614174000
+    UserID string `path:"id" validate:"required,uuid"`
+    
+    //openapi:description=Search query,example=john doe
+    Query string `query:"q" validate:"required,min=1"`
+    
+    //openapi:description=Results per page,example=20
+    Limit int `query:"limit" default:"10" validate:"min=1,max=100"`
+    
+    //openapi:description=File to upload,type=file,format=binary
+    Document *multipart.FileHeader `form:"document"`
+    
+    //openapi:description=Complex metadata object
+    Metadata map[string]interface{} `json:"metadata"`
+}
+```
+
+### Automatic Feature Detection
+
+The OpenAPI generator automatically detects and documents:
+
+- **Parameters**: Extracts from `path:`, `query:`, `header:`, `cookie:` tags
+- **Request Bodies**: Detects JSON (`json:` tags) and multipart forms (`form:` tags)
+- **File Uploads**: Automatically handles `*multipart.FileHeader` fields
+- **Validation Rules**: Converts validation tags to OpenAPI schema constraints
+- **Default Values**: Uses `default:` tag values as OpenAPI defaults
+- **Multi-Source Fields**: Documents precedence rules for fields with multiple sources
+
+### Advanced OpenAPI Configuration
+
+```go
+// Configure comprehensive API documentation
+generator := openapi.NewGenerator(openapi.Config{
+    Info: openapi.Info{
+        Title:          "Advanced API",
+        Version:        "2.1.0",
+        Description:    "Comprehensive API with full documentation",
+        TermsOfService: "https://example.com/terms",
+        Contact: &openapi.Contact{
+            Name:  "API Support",
+            URL:   "https://example.com/support",
+            Email: "support@example.com",
+        },
+        License: &openapi.License{
+            Name: "MIT",
+            URL:  "https://opensource.org/licenses/MIT",
+        },
+    },
+    Servers: []openapi.Server{
+        {URL: "https://api.example.com/v2", Description: "Production"},
+        {URL: "https://staging.example.com/v2", Description: "Staging"},
+    },
+})
+
+spec, err := generator.Generate(router)
+if err != nil {
+    log.Fatal(err)
+}
+
+// Multiple output formats
+http.Handle("/openapi.json", openapi.JSONHandler(spec))
+http.Handle("/openapi.yaml", openapi.YAMLHandler(spec))
+```
+
+### Generated OpenAPI Features
+
+The generated specifications include:
+
+- **Complete Parameter Documentation**: All path, query, header, and cookie parameters
+- **Request/Response Schemas**: Full JSON schemas with validation rules
+- **File Upload Support**: Proper `multipart/form-data` documentation
+- **Multi-Source Documentation**: Precedence rules documented in parameter descriptions
+- **Validation Constraints**: Min/max values, string formats, required fields
+- **Example Values**: From `example=` in comments and `default=` in tags
+- **Nested Objects**: Complex request/response structures
+- **Array Support**: Both simple arrays and arrays of objects
+
+### Integration with Documentation Tools
+
+The generated OpenAPI specifications work seamlessly with popular documentation tools:
+
+```bash
+# View with Swagger UI
+curl http://localhost:8080/openapi.json | swagger-ui-serve
+
+# Generate client code
+openapi-generator generate -i http://localhost:8080/openapi.json -g go -o ./client
+
+# API testing with Postman
+# Import http://localhost:8080/openapi.json into Postman
+```
+
+## 📋 Supported Data Sources
+
+| Source | Tag | Example | Description |
+|--------|-----|---------|-------------|
+| **Path** | `path:"name"` | `UserID string `path:"id"`` | URL path parameters |
+| **Query** | `query:"name"` | `Page int `query:"page"`` | URL query parameters |
+| **Headers** | `header:"name"` | `Auth string `header:"Authorization"`` | HTTP headers |
+| **Cookies** | `cookie:"name"` | `Session string `cookie:"session_id"`` | HTTP cookies |
+| **Form** | `form:"name"` | `Name string `form:"name"`` | Form data (URL-encoded/multipart) |
+| **JSON** | `json:"name"` | `Data map[string]interface{} `json:"data"`` | JSON request body |
+
+## 🔧 Advanced Features
+
+### Precedence Rules
+
+Control the order in which sources are checked:
+
+```go
+type Request struct {
+    // Check header first, fallback to cookie, then query
+    UserID string `header:"X-User-ID" cookie:"user_id" query:"user_id" precedence:"header,cookie,query"`
+    
+    // Cookie takes precedence over header
+    Language string `cookie:"lang" header:"Accept-Language" precedence:"cookie,header"`
+}
+```
+
+### Data Transformations
+
+Built-in transformations for common use cases:
+
+```go
+type Request struct {
+    ClientIP  net.IP `header:"X-Forwarded-For" transform:"first_ip"`        // Extract first IP from list
+    Username  string `header:"X-Username" transform:"to_lower"`             // Convert to lowercase
+    IsAdmin   bool   `header:"X-User-Role" transform:"is_admin"`            // Check if role is "admin"
+    Trimmed   string `query:"text" transform:"trim_space"`                  // Remove leading/trailing spaces
+}
+```
+
+### Custom Formats
+
+Parse data with custom formats:
+
+```go
+type Request struct {
+    CreatedAt   time.Time `header:"X-Created-At" format:"rfc3339"`
+    Birthday    time.Time `query:"birthday" format:"2006-01-02"`
+    UnixTime    time.Time `header:"X-Timestamp" format:"unix"`
+    CustomDate  time.Time `query:"date" format:"02/01/2006"`
+}
+```
+
+### Default Values
+
+Provide sensible defaults:
+
+```go
+type Request struct {
+    Page     int    `query:"page" default:"1"`
+    Limit    int    `query:"limit" default:"20"`
+    Sort     string `query:"sort" default:"created_at"`
+    Language string `header:"Accept-Language" default:"en"`
+    Theme    string `cookie:"theme" default:"light"`
+    
+    // Special defaults
+    RequestID string    `header:"X-Request-ID" default:"generate_uuid"`
+    Timestamp time.Time `header:"X-Timestamp" default:"now"`
+}
+```
+
+### File Uploads
+
+Handle file uploads seamlessly:
+
+```go
+type UploadRequest struct {
+    Name        string                  `form:"name" validate:"required"`
+    Description string                  `form:"description"`
+    Avatar      *multipart.FileHeader   `form:"avatar"`                    // Single file
+    Documents   []*multipart.FileHeader `form:"documents"`                 // Multiple files
+}
+
+func (h *UploadHandler) Handle(ctx context.Context, req UploadRequest) (UploadResponse, error) {
+    if req.Avatar != nil {
+        fmt.Printf("Uploaded file: %s (%d bytes)\n", req.Avatar.Filename, req.Avatar.Size)
+        
+        // Process the file
+        file, err := req.Avatar.Open()
+        if err != nil {
+            return UploadResponse{}, err
+        }
+        defer file.Close()
+        
+        // Save or process the file content...
+    }
+    
+    return UploadResponse{Message: "Upload successful"}, nil
+}
+```
+
+## 🔒 Validation
+
+Leverage `go-playground/validator` for robust validation:
 
 ```go
 type CreateUserRequest struct {
@@ -206,223 +487,275 @@ type CreateUserRequest struct {
     Email    string `json:"email" validate:"required,email"`
     Age      int    `json:"age" validate:"required,min=18,max=120"`
     Website  string `json:"website" validate:"omitempty,url"`
+    UserID   string `path:"id" validate:"required,uuid"`
+    APIKey   string `header:"X-API-Key" validate:"required,len=32"`
 }
 ```
 
-### **Error Handling**
+## 🛠️ Error Handling
 
-Structured error responses with proper HTTP status codes:
-
-```go
-func (h *UserHandler) Handle(ctx context.Context, req GetUserRequest) (User, error) {
-    if req.ID == "notfound" {
-        return User{}, typedhttp.NewNotFoundError("User not found")
-    }
-    // Validation errors automatically return 400 Bad Request
-    return User{ID: req.ID}, nil
-}
-```
-
----
-
-## 📖 OpenAPI Generation {#openapi}
-
-**Zero-maintenance API documentation** generated from your types:
+TypedHTTP provides structured error handling:
 
 ```go
-// Comment-based documentation
-type CreateUserRequest struct {
-    //openapi:description=User full name,example=John Doe
-    Name string `json:"name" validate:"required,min=2,max=50"`
+func (h *UserHandler) Handle(ctx context.Context, req GetUserRequest) (GetUserResponse, error) {
+    // Validation errors are automatically handled and return 400 Bad Request
+    // Business logic errors can return custom error types
     
-    //openapi:description=User email address,example=john@example.com  
-    Email string `json:"email" validate:"required,email"`
+    if req.ID == "invalid" {
+        return GetUserResponse{}, typedhttp.NewNotFoundError("User not found")
+    }
+    
+    if !hasPermission(req.UserID) {
+        return GetUserResponse{}, typedhttp.NewForbiddenError("Access denied")
+    }
+    
+    return GetUserResponse{ID: req.ID}, nil
 }
-
-// Automatic OpenAPI generation
-generator := openapi.NewGenerator(openapi.Config{
-    Info: openapi.Info{
-        Title:   "User API",
-        Version: "1.0.0",
-    },
-})
-
-spec, _ := generator.Generate(router)
-http.Handle("/openapi.json", openapi.JSONHandler(spec))
 ```
 
-**✅ Automatic feature detection:**
-- Parameters from `path:`, `query:`, `header:`, `cookie:` tags
-- Request bodies from `json:` and `form:` tags  
-- File uploads from `*multipart.FileHeader` fields
-- Validation rules converted to OpenAPI constraints
-- Multi-source precedence documented
+## 📊 Real-World Example
 
-[**→ View complete OpenAPI guide**](docs/adrs/ADR-003-automatic-openapi-generation.md)
-
----
-
-## 🧪 Testing {#testing}
-
-**5/5 Go-idiomatic testing utilities** with zero boilerplate:
+Here's a comprehensive example showing multiple features:
 
 ```go
-import "github.com/pavelpascari/typedhttp/pkg/testutil"
+type OrderRequest struct {
+    // Path parameters
+    OrderID string `path:"id" validate:"required,uuid"`
+    
+    // Authentication (header preferred, cookie fallback)
+    UserID string `header:"X-User-ID" cookie:"user_id" validate:"required" precedence:"header,cookie"`
+    
+    // Pagination with defaults
+    Page  int `query:"page" default:"1" validate:"min=1"`
+    Limit int `query:"limit" default:"20" validate:"min=1,max=100"`
+    
+    // Client info with transformations
+    ClientIP  net.IP `header:"X-Forwarded-For" transform:"first_ip"`
+    UserAgent string `header:"User-Agent"`
+    
+    // Preferences (cookie preferred over header)
+    Language string `cookie:"lang" header:"Accept-Language" default:"en" precedence:"cookie,header"`
+    Currency string `query:"currency" cookie:"currency" default:"USD" precedence:"query,cookie"`
+    
+    // Form data for updates
+    Status      string `form:"status" json:"status" validate:"oneof=pending confirmed cancelled" precedence:"form,json"`
+    Notes       string `form:"notes" json:"notes"`
+    Attachments []*multipart.FileHeader `form:"attachments"`
+    
+    // Metadata from JSON body
+    CustomFields map[string]interface{} `json:"custom_fields"`
+    
+    // Tracing
+    TraceID   string `header:"X-Trace-ID" query:"trace_id" precedence:"header,query"`
+    RequestID string `header:"X-Request-ID" default:"generate_uuid"`
+}
+
+type OrderHandler struct {
+    orderService OrderService
+}
+
+func (h *OrderHandler) Handle(ctx context.Context, req OrderRequest) (OrderResponse, error) {
+    log.Printf("Processing order %s for user %s from IP %s", 
+        req.OrderID, req.UserID, req.ClientIP)
+    
+    order, err := h.orderService.GetOrder(ctx, req.OrderID, req.UserID)
+    if err != nil {
+        return OrderResponse{}, typedhttp.NewNotFoundError("Order not found")
+    }
+    
+    // Handle file attachments if present
+    if len(req.Attachments) > 0 {
+        for _, attachment := range req.Attachments {
+            log.Printf("Processing attachment: %s (%d bytes)", 
+                attachment.Filename, attachment.Size)
+        }
+    }
+    
+    return OrderResponse{
+        ID:       order.ID,
+        Status:   order.Status,
+        Language: req.Language,
+        Currency: req.Currency,
+    }, nil
+}
+
+// Register the handler
+func main() {
+    router := typedhttp.NewRouter()
+    typedhttp.PUT(router, "/orders/{id}", &OrderHandler{})
+    
+    log.Println("Server starting on :8080")
+    http.ListenAndServe(":8080", router)
+}
+```
+
+## 🧪 Testing
+
+TypedHTTP includes test utilities that aim to reduce boilerplate in HTTP testing.
+
+### **Built-in Test Utilities**
+
+- 🎯 **Go Idioms**: Context-aware, explicit error handling, struct-based configuration
+- 🚀 **Reduced Boilerplate**: Simplified JSON marshaling, header setting, and response parsing
+- 🔒 **Type-Safe**: Leverages Go generics for compile-time type checking
+- 📝 **Response Assertions**: HTTP response validation with error reporting
+- 🎨 **Request Building**: Functional request modifiers for test setup
+
+### **Quick Test Example**
+
+```go
+import (
+    "github.com/pavelpascari/typedhttp/pkg/testutil"
+    "github.com/pavelpascari/typedhttp/pkg/testutil/assert"
+    "github.com/pavelpascari/typedhttp/pkg/testutil/client"
+)
 
 func TestUserAPI(t *testing.T) {
     // Setup
     router := typedhttp.NewRouter()
     typedhttp.POST(router, "/users", &CreateUserHandler{})
     
-    client := testutil.NewClient(router)
-
-    // Type-safe request building
-    req := testutil.WithAuth(
-        testutil.WithJSON(
-            testutil.POST("/users", CreateUserRequest{
-                Name:  "Jane Doe",
-                Email: "jane@example.com",
-            }),
-        ),
-        "auth-token",
+    testClient := client.NewClient(router,
+        client.WithTimeout(10*time.Second),
     )
 
-    // Context-aware execution
-    ctx := context.Background()
-    resp, err := client.Execute(ctx, req)
-    
-    // Comprehensive assertions
-    assert.AssertStatusCreated(t, resp)
-    assert.AssertJSONField(t, resp, "name", "Jane Doe")
+    t.Run("create user", func(t *testing.T) {
+        // 🎯 Perfect Go-idiomatic request building
+        req := testutil.WithAuth(
+            testutil.WithJSON(
+                testutil.POST("/users", CreateUserRequest{
+                    Name:  "Jane Doe",
+                    Email: "jane@example.com",
+                    Age:   25,
+                }),
+            ),
+            "auth-token",
+        )
+
+        // Context-aware execution with explicit error handling
+        ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+        defer cancel()
+
+        resp, err := testClient.Execute(ctx, req)
+        if err != nil {
+            if testutil.IsRequestError(err) {
+                // Handle request-specific errors
+            }
+            t.Fatalf("Request failed: %v", err)
+        }
+
+        // Comprehensive assertions with detailed error reporting
+        assert.AssertStatusCreated(t, resp)
+        assert.AssertJSONContentType(t, resp)
+        assert.AssertJSONField(t, resp, "name", "Jane Doe")
+        assert.AssertJSONFieldExists(t, resp, "id")
+    })
 }
 ```
 
-**✅ Testing features:**
-- Context-aware execution with timeout support
-- Type-safe response handling
-- File upload testing
-- Multi-source data testing
-- Validation error testing
+### **Advanced Testing Features**
 
-[**→ View complete testing guide**](docs/testing-guide.md)
-
----
-
-## 🔧 Migration {#migration}
-
-### **From Gin Framework**
-
-TypedHTTP reduces code by **37-50%** while adding type safety:
-
-**Gin (50 lines):**
 ```go
-func createUser(c *gin.Context) {
-    var req CreateUserRequest
-    if err := c.ShouldBindJSON(&req); err != nil {
-        c.JSON(400, gin.H{"error": err.Error()})
-        return
-    }
-    
-    // Manual validation
-    if req.Name == "" || len(req.Name) < 2 {
-        c.JSON(400, gin.H{"error": "name validation failed"})
-        return
-    }
-    
-    if !isValidEmail(req.Email) {
-        c.JSON(400, gin.H{"error": "invalid email"})
-        return  
-    }
-    
-    user := User{ID: generateID(), Name: req.Name, Email: req.Email}
-    c.JSON(201, user)
+// Type-safe response handling
+resp, err := client.ExecuteTyped[UserResponse](testClient, ctx, req)
+user := resp.Data // Fully typed UserResponse
+
+// File upload testing
+req := testutil.WithFile(
+    testutil.POST("/upload", formData),
+    "file", fileContent,
+)
+
+// Multi-source data testing
+req := testutil.WithCookie(
+    testutil.WithHeaders(
+        testutil.WithPathParams(
+            testutil.GET("/api/{version}/users/{id}"),
+            map[string]string{"version": "v1", "id": "123"},
+        ),
+        map[string]string{"Authorization": "Bearer token"},
+    ),
+    "session", "session-id",
+)
+
+// Validation error testing
+resp, err := testutil.ExecuteExpectingError(t, client, invalidReq)
+assert.AssertStatusBadRequest(t, resp)
+assert.AssertValidationError(t, resp, "email", "required")
+
+// Context and timeout testing
+ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
+defer cancel()
+_, err = client.Execute(ctx, slowReq)
+if errors.Is(err, context.DeadlineExceeded) {
+    t.Log("Request timed out as expected") 
 }
 ```
 
-**TypedHTTP (25 lines):**
+### **Test Utilities Documentation**
+
+- 📖 [Complete Testing Guide](docs/testing-guide.md) - Comprehensive guide with examples
+- 🔧 [Test Utilities API](pkg/testutil/README.md) - Detailed API reference
+- 🎯 [ADR-004: Test Utility Design](docs/adrs/ADR-004-test-utility-package.md) - Design decisions
+
+### **Unit Testing Handlers**
+
+For testing business logic in isolation:
+
 ```go
-type CreateUserHandler struct{}
-
-func (h *CreateUserHandler) Handle(ctx context.Context, req CreateUserRequest) (User, error) {
-    // Validation automatic, type-safe extraction guaranteed
-    return User{
-        ID:    generateID(),
-        Name:  req.Name, 
-        Email: req.Email,
-    }, nil
-}
-
-type CreateUserRequest struct {
-    Name  string `json:"name" validate:"required,min=2,max=50"`
-    Email string `json:"email" validate:"required,email"`
+func TestOrderHandler(t *testing.T) {
+    handler := &OrderHandler{orderService: mockOrderService}
+    
+    req := OrderRequest{
+        OrderID:   "123e4567-e89b-12d3-a456-426614174000",
+        UserID:    "user123",
+        Page:      1,
+        Limit:     20,
+        Language:  "en",
+        Currency:  "USD",
+        Status:    "confirmed",
+        ClientIP:  net.ParseIP("192.168.1.1"),
+        RequestID: "req-123",
+    }
+    
+    resp, err := handler.Handle(context.Background(), req)
+    assert.NoError(t, err)
+    assert.Equal(t, "123e4567-e89b-12d3-a456-426614174000", resp.ID)
 }
 ```
 
-[**→ View complete migration guide**](examples/migration/from-gin/)
+## 🏗️ Architecture
 
----
+TypedHTTP follows hexagonal architecture principles:
 
-## 🏢 Production Deployment {#production}
+- **Handlers**: Pure business logic, no HTTP concerns
+- **Decoders**: Extract and validate request data
+- **Encoders**: Format response data
+- **Middleware**: Cross-cutting concerns (logging, auth, etc.)
+- **Error Mappers**: Convert business errors to HTTP responses
 
-TypedHTTP is **production-ready** with enterprise features:
+## 📚 Documentation
 
-### **Performance Characteristics**
-- **82-84% of leading framework performance**
-- **3.6x less memory allocation**
-- **8.3x fewer allocations per request**
-- **Sub-5ms response times** for typical operations
+- [Architecture Decision Records (ADRs)](docs/adrs/) - Design decisions and implementation details
+- [Testing Guide](docs/testing-guide.md) - Testing utilities documentation
+- [Test Utilities API Reference](pkg/testutil/README.md) - Test utilities documentation
+- [OpenAPI Generator Guide](docs/adrs/ADR-003-automatic-openapi-generation.md) - OpenAPI generation documentation
+- [API Reference](https://pkg.go.dev/github.com/pavelpascari/typedhttp) - API documentation
+- [Examples](examples/) - Working examples
 
-### **Production Features**
-- ✅ **Middleware ecosystem** - Compatible with standard HTTP middleware
-- ✅ **Observability** - Built-in metrics, tracing, logging
-- ✅ **Error handling** - Structured error responses  
-- ✅ **Security** - Input validation, type safety
-- ✅ **Documentation** - Automatic OpenAPI generation
+## 🤝 Contributing
 
-### **Deployment Examples**
-- **Docker containerization** with multi-stage builds
-- **Kubernetes manifests** with health checks and scaling
-- **Monitoring setup** with Prometheus and Grafana
-- **CI/CD pipelines** with testing and deployment
-
-[**→ View production deployment guide**](examples/04-production/) *(Coming soon)*
-
----
-
-## 📚 Documentation {#documentation}
-
-### **Quick References**
-- **[API Reference](https://pkg.go.dev/github.com/pavelpascari/typedhttp)** - Complete API documentation
-- **[Examples](examples/)** - Working examples with progression from simple to complex
-- **[Performance Analysis](examples/benchmarks/PERFORMANCE-OPTIMIZATION-RESULTS.md)** - Detailed benchmark results
-
-### **In-Depth Guides**
-- **[Architecture Decision Records](docs/adrs/)** - Design decisions and implementation details
-- **[Testing Guide](docs/testing-guide.md)** - Comprehensive testing patterns
-- **[OpenAPI Guide](docs/adrs/ADR-003-automatic-openapi-generation.md)** - Complete OpenAPI generation
-- **[Learning Journey Strategy](docs/adrs/ADR-008-examples-learning-journey-strategy.md)** - Progressive learning approach
-
-### **Community**
-- **[Contributing Guide](CONTRIBUTING.md)** - How to contribute to TypedHTTP
-- **[Issues](https://github.com/pavelpascari/typedhttp/issues)** - Bug reports and feature requests
-
----
-
-## 🎯 **Ready to Start?**
-
-| **Time Available** | **Best Path** |
-|-------------------|---------------|
-| **5 minutes** | [Try the quickstart →](#quickstart) |
-| **30 minutes** | [Explore fundamentals →](examples/02-fundamentals/) |
-| **Planning migration** | [Compare with your framework →](examples/migration/) |
-| **Production ready** | [View deployment guide →](#production) |
-
-**TypedHTTP transforms Go HTTP development with type safety, performance, and zero configuration.** Join the developers who've eliminated runtime errors and boosted productivity with compile-time guarantees.
-
----
+Contributions are always welcome! Please see our [Contributing Guide](CONTRIBUTING.md) for details.
 
 ## 📄 License
 
-MIT License - see [LICENSE](LICENSE) file for details.
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
 
-**Built with ❤️ for the Go community** | **Ready for production** | **82-84% framework performance** 🚀
+## 🙏 Acknowledgments
+
+- Inspired by modern web frameworks and Go's type system
+- Built with ❤️ for the Go community
+
+---
+
+**Ready to build type-safe HTTP APIs?** Get started with TypedHTTP today! 🚀
