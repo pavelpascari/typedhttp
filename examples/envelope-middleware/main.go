@@ -63,18 +63,37 @@ func (h *UserHandler) CreateUser(ctx context.Context, req CreateUserRequest) (Cr
 	}, nil
 }
 
+// Individual handler structs for type safety
+type GetUserHandler struct {
+	userHandler *UserHandler
+}
+
+func (h *GetUserHandler) Handle(ctx context.Context, req GetUserRequest) (GetUserResponse, error) {
+	return h.userHandler.GetUser(ctx, req)
+}
+
+type CreateUserHandler struct {
+	userHandler *UserHandler
+}
+
+func (h *CreateUserHandler) Handle(ctx context.Context, req CreateUserRequest) (CreateUserResponse, error) {
+	return h.userHandler.CreateUser(ctx, req)
+}
+
 func main() {
 	// Create router
 	router := typedhttp.NewRouter()
 
-	// Create handler
+	// Create handlers
 	userHandler := &UserHandler{}
+	getUserHandler := &GetUserHandler{userHandler: userHandler}
+	createUserHandler := &CreateUserHandler{userHandler: userHandler}
 
 	// Register handlers with envelope middleware
 	// Note: For demonstration, we'll manually add middleware to the registration
 	// In a real implementation, this would be done through handler options
-	typedhttp.GET(router, "/users/{id}", userHandler.GetUser)
-	typedhttp.POST(router, "/users", userHandler.CreateUser)
+	typedhttp.GET(router, "/users/{id}", getUserHandler)
+	typedhttp.POST(router, "/users", createUserHandler)
 
 	// For demonstration purposes, let's manually add envelope middleware to the registrations
 	// This simulates what would happen when proper middleware integration is complete
