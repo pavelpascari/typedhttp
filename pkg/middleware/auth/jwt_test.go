@@ -315,7 +315,7 @@ func TestJWTMiddleware_TypedMiddleware(t *testing.T) {
 		// Create context with the token (simulating HTTP extraction)
 		req := httptest.NewRequest(http.MethodGet, "/test", http.NoBody)
 		req.Header.Set("Authorization", "Bearer "+token)
-		ctx := context.WithValue(req.Context(), httpRequestKey, req)
+		ctx := context.WithValue(req.Context(), HTTPRequestKey, req)
 
 		authReq := &AuthenticatedRequest{
 			UserID: "initial",
@@ -337,7 +337,7 @@ func TestJWTMiddleware_TypedMiddleware(t *testing.T) {
 	t.Run("authentication_failure", func(t *testing.T) {
 		req := httptest.NewRequest(http.MethodGet, "/test", http.NoBody)
 		// No Authorization header
-		ctx := context.WithValue(req.Context(), httpRequestKey, req)
+		ctx := context.WithValue(req.Context(), HTTPRequestKey, req)
 
 		authReq := &AuthenticatedRequest{
 			UserID: "initial",
