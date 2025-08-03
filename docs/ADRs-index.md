@@ -2,14 +2,14 @@
 
 ## Active ADRs
 
-| ADR | Title | Status | Date | Summary |
-|-----|-------|--------|------|---------|
-| [ADR-001](./adrs/ADR-001-typed-http-handlers.md) | Typed HTTP Handlers | ✅ **Implemented** | 2024 | Core typed handler architecture with Go generics |
-| [ADR-002](./adrs/ADR-002-request-data-source-annotations.md) | Request Data Source Annotations | ✅ **Implemented** | Jan 2025 | Multi-source request data extraction with precedence rules |
-| [ADR-003](./adrs/ADR-003-automatic-openapi-generation.md) | Automatic OpenAPI Generation | ✅ **Implemented** | Jan 2025 | Automatic OpenAPI 3.0+ spec generation with comment-based documentation |
-| [ADR-004](./adrs/ADR-004-test-utility-package.md) | TypedHTTP Test Utility Package | ✅ **Implemented** | Jan 2025 | Comprehensive test utilities for end-to-end handler testing with fluent APIs |
-| [ADR-005](./adrs/ADR-005-comprehensive-middleware-patterns.md) | Comprehensive Middleware Patterns | 📋 **Proposed** | Jan 2025 | Advanced middleware system with typed middleware, composition utilities, and standard implementations |
-| [ADR-006](./adrs/ADR-006-middleware-response-schema-modification.md) | Middleware Response Schema Modification | ✅ **Implemented** | Jan 2025 | Enable middleware to modify OpenAPI response schemas for accurate documentation |
+| ADR | Title | Status | Date     | Summary |
+|-----|-------|--------|----------|---------|
+| [ADR-001](./adrs/ADR-001-typed-http-handlers.md) | Typed HTTP Handlers | ✅ **Implemented** | Jul 2025 | Core typed handler architecture with Go generics |
+| [ADR-002](./adrs/ADR-002-request-data-source-annotations.md) | Request Data Source Annotations | ✅ **Implemented** | Jul 2025 | Multi-source request data extraction with precedence rules |
+| [ADR-003](./adrs/ADR-003-automatic-openapi-generation.md) | Automatic OpenAPI Generation | ✅ **Implemented** | Jul 2025 | Automatic OpenAPI 3.0+ spec generation with comment-based documentation |
+| [ADR-004](./adrs/ADR-004-test-utility-package.md) | TypedHTTP Test Utility Package | ✅ **Implemented** | Jul 2025 | Comprehensive test utilities for end-to-end handler testing with fluent APIs |
+| [ADR-005](./adrs/ADR-005-comprehensive-middleware-patterns.md) | Comprehensive Middleware Patterns | 📋 **Proposed** | Jul 2025 | Advanced middleware system with typed middleware, composition utilities, and standard implementations |
+| [ADR-006](./adrs/ADR-006-middleware-response-schema-modification.md) | Middleware Response Schema Modification | ✅ **Implemented** | Jul 2025 | Enable middleware to modify OpenAPI response schemas for accurate documentation |
 | [ADR-007](./adrs/ADR-007-boilerplate-reduction-router-composition.md) | Boilerplate Reduction and Router Composition | ✅ **Implemented** | Aug 2025 | 52% code reduction via Resource pattern + team-based router composition for 50+ engineer organizations |
 
 ## Implementation Status

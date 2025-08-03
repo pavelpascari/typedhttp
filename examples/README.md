@@ -1,6 +1,8 @@
 # TypedHTTP Examples & Architecture Guide
 
-This directory contains comprehensive examples demonstrating how to architect production-ready applications using TypedHTTP with advanced middleware patterns and automatic OpenAPI generation.
+This directory contains experimental examples demonstrating how to architect applications using TypedHTTP with middleware patterns and automatic OpenAPI generation.
+
+⚠️ **Note**: These are experimental examples for learning and exploration. Not recommended for production use.
 
 ## 📚 Documentation
 
@@ -28,7 +30,7 @@ This directory contains comprehensive examples demonstrating how to architect pr
 - ✅ Comprehensive OpenAPI generation with accurate schema modification
 - ✅ Real-world domain models (Users, Products, Orders)
 - ✅ Advanced validation with custom error types
-- ✅ Production-ready patterns
+- ✅ Experimental patterns for learning
 
 **Run Example**:
 ```bash

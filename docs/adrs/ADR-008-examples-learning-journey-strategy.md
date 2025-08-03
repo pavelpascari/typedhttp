@@ -1,7 +1,7 @@
 # ADR-008: Examples & Learning Journey Strategy
 
-**Status**: Accepted  
-**Date**: 2025-08-03  
+**Accepted** - Implemented ✅
+**Implementation Date**: August 2025
 **Authors**: Community Product Manager, Go OSS Reviewer  
 **Related**: [ADR-007: Boilerplate Reduction & Router Composition](./ADR-007-boilerplate-reduction-router-composition.md)
 
