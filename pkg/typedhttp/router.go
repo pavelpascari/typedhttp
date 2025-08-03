@@ -3,9 +3,83 @@ package typedhttp
 import (
 	"net/http"
 	"reflect"
+	"sync"
 
 	"github.com/go-playground/validator/v10"
 )
+
+var (
+	// Global validator instance to avoid per-request creation
+	globalValidator     *validator.Validate
+	globalValidatorOnce sync.Once
+)
+
+// getGlobalValidator returns a singleton validator instance.
+func getGlobalValidator() *validator.Validate {
+	globalValidatorOnce.Do(func() {
+		globalValidator = validator.New()
+	})
+	return globalValidator
+}
+
+// getOptimalDecoder returns the most efficient decoder for the given request type.
+func getOptimalDecoder[T any]() RequestDecoder[T] {
+	var result T
+	resultType := reflect.TypeOf(result)
+	
+	// Handle case where T is interface{} or similar
+	if resultType == nil || resultType.Kind() != reflect.Struct {
+		return NewCombinedDecoder[T](getGlobalValidator())
+	}
+
+	hasPathTags := false
+	hasJSONTags := false
+	hasQueryTags := false
+	hasHeaderTags := false
+	hasCookieTags := false
+	hasFormTags := false
+
+	for i := 0; i < resultType.NumField(); i++ {
+		field := resultType.Field(i)
+		
+		if !field.IsExported() {
+			continue
+		}
+
+		if field.Tag.Get("path") != "" {
+			hasPathTags = true
+		}
+		if field.Tag.Get("json") != "" {
+			hasJSONTags = true
+		}
+		if field.Tag.Get("query") != "" {
+			hasQueryTags = true
+		}
+		if field.Tag.Get("header") != "" {
+			hasHeaderTags = true
+		}
+		if field.Tag.Get("cookie") != "" {
+			hasCookieTags = true
+		}
+		if field.Tag.Get("form") != "" {
+			hasFormTags = true
+		}
+	}
+
+	// Optimize for common cases
+	if hasPathTags && !hasJSONTags && !hasQueryTags && !hasHeaderTags && !hasCookieTags && !hasFormTags {
+		// Path-only requests (like GET /users/{id})
+		return NewPathDecoder[T](getGlobalValidator())
+	}
+	
+	if hasJSONTags && !hasPathTags && !hasQueryTags && !hasHeaderTags && !hasCookieTags && !hasFormTags {
+		// JSON-only requests (like simple POST with JSON body)
+		return NewJSONDecoder[T](getGlobalValidator())
+	}
+
+	// Fall back to combined decoder for complex cases
+	return NewCombinedDecoder[T](getGlobalValidator())
+}
 
 // Core router types and functionality
 
@@ -30,13 +104,15 @@ type HandlerRegistration struct {
 
 // HTTPHandler wraps a typed handler with HTTP-specific functionality.
 type HTTPHandler[TRequest, TResponse any] struct {
-	handler     Handler[TRequest, TResponse]
-	decoder     RequestDecoder[TRequest]
-	encoder     ResponseEncoder[TResponse]
-	errorMapper ErrorMapper
-	middleware  []Middleware
-	metadata    OpenAPIMetadata
-	config      ObservabilityConfig
+	handler        Handler[TRequest, TResponse]
+	decoder        RequestDecoder[TRequest]
+	encoder        ResponseEncoder[TResponse]
+	errorMapper    ErrorMapper
+	middleware     []Middleware
+	metadata       OpenAPIMetadata
+	config         ObservabilityConfig
+	cachedDecoder  RequestDecoder[TRequest]  // Cached decoder to avoid per-request creation
+	cachedEncoder  ResponseEncoder[TResponse] // Cached encoder to avoid per-request creation
 }
 
 // ServeHTTP implements http.Handler for the typed handler.
@@ -47,11 +123,13 @@ func (h *HTTPHandler[TRequest, TResponse]) ServeHTTP(w http.ResponseWriter, r *h
 
 	// Apply middleware
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		// Decode request
+		// Decode request using cached decoder
 		if h.decoder != nil {
 			req, err = h.decoder.Decode(r)
+		} else if h.cachedDecoder != nil {
+			req, err = h.cachedDecoder.Decode(r)
 		} else {
-			// Use default combined decoder (handles path, query, and JSON)
+			// Fallback to creating decoder (should not happen with proper initialization)
 			v := validator.New()
 			decoder := NewCombinedDecoder[TRequest](v)
 			req, err = decoder.Decode(r)
@@ -71,7 +149,7 @@ func (h *HTTPHandler[TRequest, TResponse]) ServeHTTP(w http.ResponseWriter, r *h
 			return
 		}
 
-		// Encode response
+		// Encode response using cached encoder
 		statusCode := http.StatusOK
 		if r.Method == http.MethodPost {
 			statusCode = http.StatusCreated
@@ -79,8 +157,10 @@ func (h *HTTPHandler[TRequest, TResponse]) ServeHTTP(w http.ResponseWriter, r *h
 
 		if h.encoder != nil {
 			err = h.encoder.Encode(w, resp, statusCode)
+		} else if h.cachedEncoder != nil {
+			err = h.cachedEncoder.Encode(w, resp, statusCode)
 		} else {
-			// Use default JSON encoder
+			// Fallback to creating encoder (should not happen with proper initialization)
 			encoder := NewJSONEncoder[TResponse]()
 			err = encoder.Encode(w, resp, statusCode)
 		}
@@ -115,6 +195,7 @@ func (h *HTTPHandler[TRequest, TResponse]) handleError(w http.ResponseWriter, er
 	}
 
 	// Encode error response (this will set content-type and status code)
+	// Note: For error responses, we create a new encoder since it's interface{} type
 	encoder := NewJSONEncoder[interface{}]()
 	if encodeErr := encoder.Encode(w, response, statusCode); encodeErr != nil {
 		// Fallback to a simple error message
@@ -244,6 +325,9 @@ func NewHTTPHandler[TRequest, TResponse any](
 		if decoder, ok := config.Decoder.(RequestDecoder[TRequest]); ok {
 			httpHandler.decoder = decoder
 		}
+	} else {
+		// Create optimal cached decoder based on request type
+		httpHandler.cachedDecoder = getOptimalDecoder[TRequest]()
 	}
 
 	// Set encoder
@@ -251,6 +335,9 @@ func NewHTTPHandler[TRequest, TResponse any](
 		if encoder, ok := config.Encoder.(ResponseEncoder[TResponse]); ok {
 			httpHandler.encoder = encoder
 		}
+	} else {
+		// Create cached encoder if none provided
+		httpHandler.cachedEncoder = NewJSONEncoder[TResponse]()
 	}
 
 	// Set error mapper
@@ -263,8 +350,3 @@ func NewHTTPHandler[TRequest, TResponse any](
 
 	return httpHandler
 }
-
-// Enhanced HTTP handler will be implemented in the next iteration
-
-// Enhanced router implementation is in development and will be completed in the next iteration
-// For now, the core middleware infrastructure is fully implemented and tested

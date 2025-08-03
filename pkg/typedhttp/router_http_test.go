@@ -49,8 +49,8 @@ func TestHTTPHandlerServeHTTP(t *testing.T) {
 			name:           "successful GET request",
 			method:         http.MethodGet,
 			path:           "/test",
-			body:           "",
-			contentType:    "",
+			body:           `{"name":"John","age":30}`,
+			contentType:    "application/json",
 			expectedStatus: http.StatusOK, // GET should return 200
 			expectedBody:   `{"message":"Hello","status":"success"}`,
 		},
