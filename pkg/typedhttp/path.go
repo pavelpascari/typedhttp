@@ -559,7 +559,9 @@ func (d *CombinedDecoder[T]) handleSpecialCases(r *http.Request, result *T) erro
 	if needsJSON && r.Body != nil && r.ContentLength > 0 {
 		contentType := r.Header.Get("Content-Type")
 		if strings.Contains(contentType, "application/json") {
-			if jsonResult, err := d.jsonDecoder.Decode(r); err == nil {
+			if jsonResult, err := d.jsonDecoder.Decode(r); err != nil {
+				return err // Propagate JSON parsing errors
+			} else {
 				*result = mergeStructs(*result, jsonResult)
 			}
 		}

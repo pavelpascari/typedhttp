@@ -1,3 +1,5 @@
+// +build ignore
+
 package main
 
 import (
@@ -52,7 +54,7 @@ func main() {
 	}
 
 	// Create combined handler that serves both API routes and documentation
-	combinedHandler := createCombinedHandler(appRouter, jsonSpec, yamlSpec, approach)
+	combinedHandler := createCombinedHandlerForDemo(appRouter, jsonSpec, yamlSpec, approach)
 
 	// Start server
 	fmt.Println("🚀 TypedHTTP Boilerplate Reduction Demo")
@@ -72,8 +74,8 @@ func main() {
 	log.Fatal(http.ListenAndServe(serverAddr, combinedHandler))
 }
 
-// createCombinedHandler creates a handler that serves both API routes and documentation
-func createCombinedHandler(apiRouter http.Handler, jsonSpec, yamlSpec []byte, approach string) http.Handler {
+// createCombinedHandlerForDemo creates a handler that serves both API routes and documentation
+func createCombinedHandlerForDemo(apiRouter http.Handler, jsonSpec, yamlSpec []byte, approach string) http.Handler {
 	// Create a new mux for documentation routes
 	docMux := http.NewServeMux()
 
