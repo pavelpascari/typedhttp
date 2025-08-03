@@ -8,7 +8,7 @@ replace github.com/pavelpascari/typedhttp => ../../../
 
 require (
 	github.com/gin-gonic/gin v1.9.1
-	github.com/go-chi/chi/v5 v5.0.10
+	github.com/go-chi/chi/v5 v5.2.2
 	github.com/labstack/echo/v4 v4.11.1
 	github.com/pavelpascari/typedhttp v0.0.0-00010101000000-000000000000
 )
