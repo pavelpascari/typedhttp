@@ -2,6 +2,7 @@ package typedhttp
 
 import (
 	"context"
+	"errors"
 	"testing"
 	"time"
 
@@ -70,23 +71,23 @@ func TestAPIResponse(t *testing.T) {
 func TestResponseEnvelopeMiddleware(t *testing.T) {
 	t.Run("wraps response with default options", func(t *testing.T) {
 		middleware := NewResponseEnvelopeMiddleware[EnvelopeTestResponseData]()
-		
+
 		// Create context with request ID
 		ctx := context.WithValue(context.Background(), "request_id", "test-request-123")
-		
+
 		originalResponse := &EnvelopeTestResponseData{ID: "123", Message: "test"}
-		
+
 		envelope, err := middleware.After(ctx, originalResponse)
 		require.NoError(t, err)
 		require.NotNil(t, envelope)
-		
+
 		assert.True(t, envelope.Success)
 		assert.Equal(t, originalResponse, envelope.Data)
 		assert.Nil(t, envelope.Error)
 		assert.NotNil(t, envelope.Meta)
 		assert.Equal(t, "test-request-123", envelope.Meta.RequestID)
 		assert.NotEmpty(t, envelope.Meta.Timestamp)
-		
+
 		// Verify timestamp format
 		_, err = time.Parse(time.RFC3339, envelope.Meta.Timestamp)
 		assert.NoError(t, err)
@@ -95,13 +96,13 @@ func TestResponseEnvelopeMiddleware(t *testing.T) {
 	t.Run("wraps response without request ID in context", func(t *testing.T) {
 		middleware := NewResponseEnvelopeMiddleware[EnvelopeTestResponseData]()
 		ctx := context.Background()
-		
+
 		originalResponse := &EnvelopeTestResponseData{ID: "123", Message: "test"}
-		
+
 		envelope, err := middleware.After(ctx, originalResponse)
 		require.NoError(t, err)
 		require.NotNil(t, envelope)
-		
+
 		assert.True(t, envelope.Success)
 		assert.Equal(t, originalResponse, envelope.Data)
 		assert.NotNil(t, envelope.Meta)
@@ -113,14 +114,14 @@ func TestResponseEnvelopeMiddleware(t *testing.T) {
 		middleware := NewResponseEnvelopeMiddleware[EnvelopeTestResponseData](
 			WithRequestID(false),
 		)
-		
+
 		ctx := context.WithValue(context.Background(), "request_id", "test-request-123")
 		originalResponse := &EnvelopeTestResponseData{ID: "123", Message: "test"}
-		
+
 		envelope, err := middleware.After(ctx, originalResponse)
 		require.NoError(t, err)
 		require.NotNil(t, envelope)
-		
+
 		assert.True(t, envelope.Success)
 		assert.NotNil(t, envelope.Meta)
 		assert.Empty(t, envelope.Meta.RequestID) // Should be empty due to option
@@ -131,14 +132,14 @@ func TestResponseEnvelopeMiddleware(t *testing.T) {
 		middleware := NewResponseEnvelopeMiddleware[EnvelopeTestResponseData](
 			WithTimestamp(false),
 		)
-		
+
 		ctx := context.WithValue(context.Background(), "request_id", "test-request-123")
 		originalResponse := &EnvelopeTestResponseData{ID: "123", Message: "test"}
-		
+
 		envelope, err := middleware.After(ctx, originalResponse)
 		require.NoError(t, err)
 		require.NotNil(t, envelope)
-		
+
 		assert.True(t, envelope.Success)
 		assert.NotNil(t, envelope.Meta)
 		assert.Equal(t, "test-request-123", envelope.Meta.RequestID)
@@ -149,14 +150,14 @@ func TestResponseEnvelopeMiddleware(t *testing.T) {
 		middleware := NewResponseEnvelopeMiddleware[EnvelopeTestResponseData](
 			WithMeta(false),
 		)
-		
+
 		ctx := context.WithValue(context.Background(), "request_id", "test-request-123")
 		originalResponse := &EnvelopeTestResponseData{ID: "123", Message: "test"}
-		
+
 		envelope, err := middleware.After(ctx, originalResponse)
 		require.NoError(t, err)
 		require.NotNil(t, envelope)
-		
+
 		assert.True(t, envelope.Success)
 		assert.Equal(t, originalResponse, envelope.Data)
 		assert.Nil(t, envelope.Meta) // Should be nil due to option
@@ -168,14 +169,14 @@ func TestResponseEnvelopeMiddleware(t *testing.T) {
 			WithRequestID(true), // Should be overridden by WithMeta(false)
 			WithTimestamp(true), // Should be overridden by WithMeta(false)
 		)
-		
+
 		ctx := context.WithValue(context.Background(), "request_id", "test-request-123")
 		originalResponse := &EnvelopeTestResponseData{ID: "123", Message: "test"}
-		
+
 		envelope, err := middleware.After(ctx, originalResponse)
 		require.NoError(t, err)
 		require.NotNil(t, envelope)
-		
+
 		assert.True(t, envelope.Success)
 		assert.Nil(t, envelope.Meta) // Meta should be completely disabled
 	})
@@ -185,7 +186,7 @@ func TestResponseEnvelopeMiddleware(t *testing.T) {
 func TestResponseEnvelopeMiddleware_OpenAPISchema(t *testing.T) {
 	t.Run("modifies schema with all metadata", func(t *testing.T) {
 		middleware := NewResponseEnvelopeMiddleware[EnvelopeTestResponseData]()
-		
+
 		// Create original schema
 		originalSchema := &openapi3.SchemaRef{
 			Value: &openapi3.Schema{
@@ -204,13 +205,13 @@ func TestResponseEnvelopeMiddleware_OpenAPISchema(t *testing.T) {
 				},
 			},
 		}
-		
+
 		ctx := context.Background()
 		envelopeSchema, err := middleware.ModifyResponseSchema(ctx, originalSchema)
 		require.NoError(t, err)
 		require.NotNil(t, envelopeSchema)
 		require.NotNil(t, envelopeSchema.Value)
-		
+
 		// Verify envelope structure
 		assert.Equal(t, &openapi3.Types{"object"}, envelopeSchema.Value.Type)
 		assert.Contains(t, envelopeSchema.Value.Properties, "data")
@@ -218,20 +219,20 @@ func TestResponseEnvelopeMiddleware_OpenAPISchema(t *testing.T) {
 		assert.Contains(t, envelopeSchema.Value.Properties, "success")
 		assert.Contains(t, envelopeSchema.Value.Properties, "meta")
 		assert.Equal(t, []string{"success"}, envelopeSchema.Value.Required)
-		
+
 		// Verify data field references original schema
 		dataSchema := envelopeSchema.Value.Properties["data"]
 		assert.True(t, dataSchema.Value.Nullable)
 		assert.Len(t, dataSchema.Value.OneOf, 1)
 		assert.Equal(t, originalSchema, dataSchema.Value.OneOf[0])
-		
+
 		// Verify meta structure
 		metaSchema := envelopeSchema.Value.Properties["meta"]
 		assert.True(t, metaSchema.Value.Nullable)
 		assert.Equal(t, &openapi3.Types{"object"}, metaSchema.Value.Type)
 		assert.Contains(t, metaSchema.Value.Properties, "request_id")
 		assert.Contains(t, metaSchema.Value.Properties, "timestamp")
-		
+
 		// Verify timestamp format
 		timestampSchema := metaSchema.Value.Properties["timestamp"]
 		assert.Equal(t, "date-time", timestampSchema.Value.Format)
@@ -241,18 +242,18 @@ func TestResponseEnvelopeMiddleware_OpenAPISchema(t *testing.T) {
 		middleware := NewResponseEnvelopeMiddleware[EnvelopeTestResponseData](
 			WithMeta(false),
 		)
-		
+
 		originalSchema := &openapi3.SchemaRef{
 			Value: &openapi3.Schema{
 				Type: &openapi3.Types{"object"},
 			},
 		}
-		
+
 		ctx := context.Background()
 		envelopeSchema, err := middleware.ModifyResponseSchema(ctx, originalSchema)
 		require.NoError(t, err)
 		require.NotNil(t, envelopeSchema)
-		
+
 		// Should not include meta
 		assert.NotContains(t, envelopeSchema.Value.Properties, "meta")
 		assert.Contains(t, envelopeSchema.Value.Properties, "data")
@@ -265,18 +266,18 @@ func TestResponseEnvelopeMiddleware_OpenAPISchema(t *testing.T) {
 			WithRequestID(false),
 			WithTimestamp(true),
 		)
-		
+
 		originalSchema := &openapi3.SchemaRef{
 			Value: &openapi3.Schema{
 				Type: &openapi3.Types{"object"},
 			},
 		}
-		
+
 		ctx := context.Background()
 		envelopeSchema, err := middleware.ModifyResponseSchema(ctx, originalSchema)
 		require.NoError(t, err)
 		require.NotNil(t, envelopeSchema)
-		
+
 		// Should include meta but only timestamp
 		assert.Contains(t, envelopeSchema.Value.Properties, "meta")
 		metaSchema := envelopeSchema.Value.Properties["meta"]
@@ -289,38 +290,38 @@ func TestResponseEnvelopeMiddleware_OpenAPISchema(t *testing.T) {
 func TestErrorEnvelopeMiddleware(t *testing.T) {
 	t.Run("passes through successful responses", func(t *testing.T) {
 		middleware := NewErrorEnvelopeMiddleware[EnvelopeTestRequest, EnvelopeTestResponseData]()
-		
+
 		ctx := context.Background()
 		req := &EnvelopeTestRequest{Name: "test"}
 		resp := &EnvelopeTestResponseData{ID: "123", Message: "success"}
-		
+
 		resultResp, resultErr := middleware.After(ctx, req, resp, nil)
-		
+
 		assert.Equal(t, resp, resultResp)
 		assert.NoError(t, resultErr)
 	})
 
 	t.Run("wraps errors in envelope", func(t *testing.T) {
 		middleware := NewErrorEnvelopeMiddleware[EnvelopeTestRequest, EnvelopeTestResponseData]()
-		
+
 		ctx := context.WithValue(context.Background(), "request_id", "error-request-123")
 		req := &EnvelopeTestRequest{Name: "test"}
 		resp := &EnvelopeTestResponseData{}
 		originalError := assert.AnError
-		
+
 		resultResp, resultErr := middleware.After(ctx, req, resp, originalError)
-		
+
 		assert.Equal(t, resp, resultResp) // Original response passed through
 		require.Error(t, resultErr)
-		
+
 		// Verify it's an EnvelopeError
-		envelopeErr, ok := resultErr.(*EnvelopeError)
-		require.True(t, ok)
-		
+		var envelopeErr *EnvelopeError
+		require.True(t, errors.As(resultErr, &envelopeErr))
+
 		// Verify envelope structure
 		envelope, ok := envelopeErr.Envelope.(*APIResponse[EnvelopeTestResponseData])
 		require.True(t, ok)
-		
+
 		assert.False(t, envelope.Success)
 		assert.Nil(t, envelope.Data)
 		require.NotNil(t, envelope.Error)
@@ -332,28 +333,28 @@ func TestErrorEnvelopeMiddleware(t *testing.T) {
 
 	t.Run("Before method is no-op", func(t *testing.T) {
 		middleware := NewErrorEnvelopeMiddleware[EnvelopeTestRequest, EnvelopeTestResponseData]()
-		
+
 		ctx := context.Background()
 		req := &EnvelopeTestRequest{Name: "test"}
-		
+
 		resultCtx, err := middleware.Before(ctx, req)
-		
+
 		assert.Equal(t, ctx, resultCtx)
 		assert.NoError(t, err)
 	})
 
 	t.Run("ModifyResponseSchema returns original schema", func(t *testing.T) {
 		middleware := NewErrorEnvelopeMiddleware[EnvelopeTestRequest, EnvelopeTestResponseData]()
-		
+
 		originalSchema := &openapi3.SchemaRef{
 			Value: &openapi3.Schema{
 				Type: &openapi3.Types{"object"},
 			},
 		}
-		
+
 		ctx := context.Background()
 		resultSchema, err := middleware.ModifyResponseSchema(ctx, originalSchema)
-		
+
 		assert.Equal(t, originalSchema, resultSchema)
 		assert.NoError(t, err)
 	})
@@ -367,15 +368,15 @@ func TestEnvelopeError(t *testing.T) {
 			Error:   &errorMsg,
 			Success: false,
 		}
-		
+
 		envelopeErr := &EnvelopeError{Envelope: envelope}
-		
+
 		assert.Equal(t, errorMsg, envelopeErr.Error())
 	})
 
 	t.Run("returns default message for invalid envelope", func(t *testing.T) {
 		envelopeErr := &EnvelopeError{Envelope: "invalid"}
-		
+
 		assert.Equal(t, "envelope error", envelopeErr.Error())
 	})
 
@@ -384,9 +385,9 @@ func TestEnvelopeError(t *testing.T) {
 			Error:   nil,
 			Success: false,
 		}
-		
+
 		envelopeErr := &EnvelopeError{Envelope: envelope}
-		
+
 		assert.Equal(t, "envelope error", envelopeErr.Error())
 	})
 }
@@ -395,11 +396,11 @@ func TestEnvelopeError(t *testing.T) {
 func TestEnvelopeOptions(t *testing.T) {
 	t.Run("WithRequestID option", func(t *testing.T) {
 		config := &EnvelopeConfig{}
-		
+
 		// Test enabling
 		WithRequestID(true)(config)
 		assert.True(t, config.IncludeRequestID)
-		
+
 		// Test disabling
 		WithRequestID(false)(config)
 		assert.False(t, config.IncludeRequestID)
@@ -407,11 +408,11 @@ func TestEnvelopeOptions(t *testing.T) {
 
 	t.Run("WithTimestamp option", func(t *testing.T) {
 		config := &EnvelopeConfig{}
-		
+
 		// Test enabling
 		WithTimestamp(true)(config)
 		assert.True(t, config.IncludeTimestamp)
-		
+
 		// Test disabling
 		WithTimestamp(false)(config)
 		assert.False(t, config.IncludeTimestamp)
@@ -422,13 +423,13 @@ func TestEnvelopeOptions(t *testing.T) {
 			IncludeRequestID: true,
 			IncludeTimestamp: true,
 		}
-		
+
 		// Test enabling (should not affect other settings)
 		WithMeta(true)(config)
 		assert.True(t, config.IncludeMeta)
 		assert.True(t, config.IncludeRequestID)
 		assert.True(t, config.IncludeTimestamp)
-		
+
 		// Test disabling (should disable other meta-related settings)
 		WithMeta(false)(config)
 		assert.False(t, config.IncludeMeta)
@@ -445,15 +446,15 @@ func TestEnvelopeIntegration(t *testing.T) {
 			WithTimestamp(false),
 			WithMeta(true),
 		)
-		
+
 		ctx := context.WithValue(context.Background(), "request_id", "integration-test-123")
 		originalResponse := &EnvelopeTestResponseData{ID: "123", Message: "integration test"}
-		
+
 		envelope, err := middleware.After(ctx, originalResponse)
 		require.NoError(t, err)
 		require.NotNil(t, envelope)
 		require.NotNil(t, envelope.Meta)
-		
+
 		assert.True(t, envelope.Success)
 		assert.Equal(t, originalResponse, envelope.Data)
 		assert.Equal(t, "integration-test-123", envelope.Meta.RequestID)
@@ -462,31 +463,31 @@ func TestEnvelopeIntegration(t *testing.T) {
 
 	t.Run("context without request_id string type", func(t *testing.T) {
 		middleware := NewResponseEnvelopeMiddleware[EnvelopeTestResponseData]()
-		
+
 		// Test with non-string request ID
 		ctx := context.WithValue(context.Background(), "request_id", 12345)
 		originalResponse := &EnvelopeTestResponseData{ID: "123", Message: "test"}
-		
+
 		envelope, err := middleware.After(ctx, originalResponse)
 		require.NoError(t, err)
 		require.NotNil(t, envelope)
 		require.NotNil(t, envelope.Meta)
-		
+
 		assert.Empty(t, envelope.Meta.RequestID) // Should be empty for non-string type
 		assert.NotEmpty(t, envelope.Meta.Timestamp)
 	})
 
 	t.Run("empty request_id string", func(t *testing.T) {
 		middleware := NewResponseEnvelopeMiddleware[EnvelopeTestResponseData]()
-		
+
 		ctx := context.WithValue(context.Background(), "request_id", "")
 		originalResponse := &EnvelopeTestResponseData{ID: "123", Message: "test"}
-		
+
 		envelope, err := middleware.After(ctx, originalResponse)
 		require.NoError(t, err)
 		require.NotNil(t, envelope)
 		require.NotNil(t, envelope.Meta)
-		
+
 		assert.Empty(t, envelope.Meta.RequestID) // Should be empty for empty string
 		assert.NotEmpty(t, envelope.Meta.Timestamp)
 	})

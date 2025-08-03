@@ -112,10 +112,10 @@ func TestCreateUserHandler_ValidationErrors(t *testing.T) {
 			// Note: In a real TypedHTTP implementation, validation would happen
 			// before the handler is called, so these would be integration tests
 			// rather than unit tests. For demonstration, we'll just show the pattern.
-			
+
 			handler := &CreateUserHandler{}
 			_, err := handler.Handle(context.Background(), tt.request)
-			
+
 			// In practice, validation errors would be caught by the framework
 			// before reaching the handler, but this shows the testing pattern
 			if tt.wantErr != "" {
@@ -153,7 +153,7 @@ func TestGinGetUser(t *testing.T) {
     r.ServeHTTP(w, req)
 
     assert.Equal(t, 200, w.Code)
-    
+
     var user User
     err := json.Unmarshal(w.Body.Bytes(), &user)
     require.NoError(t, err)

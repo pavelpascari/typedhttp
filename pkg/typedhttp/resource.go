@@ -2,9 +2,16 @@ package typedhttp
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"reflect"
 	"strings"
+)
+
+// Error variables for static error handling.
+var (
+	ErrMethodNotFound               = errors.New("method not found on service")
+	ErrMethodInvalidReturnSignature = errors.New("method should return (response, error)")
 )
 
 // ResourceService represents a service that can handle CRUD operations for a resource.
@@ -41,15 +48,15 @@ type OperationConfig struct {
 // ResourceConfig defines configuration for registering a complete resource.
 type ResourceConfig struct {
 	// Base configuration
-	Tags        []string `json:"tags,omitempty"`
-	PathPrefix  string   `json:"path_prefix,omitempty"` // e.g., "/api/v1"
-	
+	Tags       []string `json:"tags,omitempty"`
+	PathPrefix string   `json:"path_prefix,omitempty"` // e.g., "/api/v1"
+
 	// Operation-specific configurations
 	Operations map[string]OperationConfig `json:"operations,omitempty"`
-	
+
 	// Middleware
 	Middleware []MiddlewareEntry `json:"middleware,omitempty"`
-	
+
 	// Default options for all operations
 	DefaultOptions []HandlerOption `json:"-"`
 }
@@ -80,13 +87,13 @@ func Resource[TGetReq, TGetResp, TListReq, TListResp, TCreateReq, TCreateResp, T
 ) {
 	// Apply path prefix
 	fullPath := router.pathPrefix + path
-	
+
 	// Merge middleware
 	allMiddleware := append(router.middleware, config.Middleware...)
-	
+
 	// Merge default options with middleware
 	defaultOpts := append(config.DefaultOptions, withMiddlewareEntries(allMiddleware))
-	
+
 	// Register individual operations based on configuration
 	operations := map[string]struct {
 		method string
@@ -98,7 +105,7 @@ func Resource[TGetReq, TGetResp, TListReq, TListResp, TCreateReq, TCreateResp, T
 			path:   fullPath + "/{id}",
 			setup: func() {
 				handler := &resourceHandler[TGetReq, TGetResp]{
-					service: service,
+					service:   service,
 					operation: "Get",
 				}
 				opts := append(defaultOpts, buildOperationOptions("GET", config)...)
@@ -106,11 +113,11 @@ func Resource[TGetReq, TGetResp, TListReq, TListResp, TCreateReq, TCreateResp, T
 			},
 		},
 		"LIST": {
-			method: "GET", 
+			method: "GET",
 			path:   fullPath,
 			setup: func() {
 				handler := &resourceHandler[TListReq, TListResp]{
-					service: service,
+					service:   service,
 					operation: "List",
 				}
 				opts := append(defaultOpts, buildOperationOptions("LIST", config)...)
@@ -122,7 +129,7 @@ func Resource[TGetReq, TGetResp, TListReq, TListResp, TCreateReq, TCreateResp, T
 			path:   fullPath,
 			setup: func() {
 				handler := &resourceHandler[TCreateReq, TCreateResp]{
-					service: service,
+					service:   service,
 					operation: "Create",
 				}
 				opts := append(defaultOpts, buildOperationOptions("POST", config)...)
@@ -134,7 +141,7 @@ func Resource[TGetReq, TGetResp, TListReq, TListResp, TCreateReq, TCreateResp, T
 			path:   fullPath + "/{id}",
 			setup: func() {
 				handler := &resourceHandler[TUpdateReq, TUpdateResp]{
-					service: service,
+					service:   service,
 					operation: "Update",
 				}
 				opts := append(defaultOpts, buildOperationOptions("PUT", config)...)
@@ -146,7 +153,7 @@ func Resource[TGetReq, TGetResp, TListReq, TListResp, TCreateReq, TCreateResp, T
 			path:   fullPath + "/{id}",
 			setup: func() {
 				handler := &resourceHandler[TDeleteReq, TDeleteResp]{
-					service: service,
+					service:   service,
 					operation: "Delete",
 				}
 				opts := append(defaultOpts, buildOperationOptions("DELETE", config)...)
@@ -154,7 +161,7 @@ func Resource[TGetReq, TGetResp, TListReq, TListResp, TCreateReq, TCreateResp, T
 			},
 		},
 	}
-	
+
 	// Register enabled operations
 	for op, setup := range operations {
 		if shouldEnableOperation(op, config) {
@@ -173,32 +180,32 @@ type resourceHandler[TReq, TResp any] struct {
 // Handle implements the Handler interface by delegating to the appropriate service method.
 func (h *resourceHandler[TReq, TResp]) Handle(ctx context.Context, req TReq) (TResp, error) {
 	var zero TResp
-	
+
 	// Use reflection to call the appropriate method on the service
 	serviceValue := reflect.ValueOf(h.service)
 	method := serviceValue.MethodByName(h.operation)
-	
+
 	if !method.IsValid() {
-		return zero, fmt.Errorf("method %s not found on service", h.operation)
+		return zero, fmt.Errorf("%w: %s", ErrMethodNotFound, h.operation)
 	}
-	
+
 	// Call the method with context and request
 	args := []reflect.Value{
 		reflect.ValueOf(ctx),
 		reflect.ValueOf(req),
 	}
-	
+
 	results := method.Call(args)
 	if len(results) != 2 {
-		return zero, fmt.Errorf("method %s should return (response, error)", h.operation)
+		return zero, fmt.Errorf("%w: %s", ErrMethodInvalidReturnSignature, h.operation)
 	}
-	
+
 	// Check for error
 	if !results[1].IsNil() {
 		err := results[1].Interface().(error)
 		return zero, err
 	}
-	
+
 	// Return response
 	response := results[0].Interface().(TResp)
 	return response, nil
@@ -216,12 +223,12 @@ func shouldEnableOperation(operation string, config ResourceConfig) bool {
 
 func buildOperationOptions(operation string, config ResourceConfig) []HandlerOption {
 	var opts []HandlerOption
-	
+
 	// Add base tags
 	if len(config.Tags) > 0 {
 		opts = append(opts, WithTags(config.Tags...))
 	}
-	
+
 	// Add operation-specific configuration
 	if opConfig, exists := config.Operations[operation]; exists {
 		if opConfig.Summary != "" {
@@ -248,7 +255,7 @@ func buildOperationOptions(operation string, config ResourceConfig) []HandlerOpt
 			opts = append(opts, WithSummary(fmt.Sprintf("Delete %s", inferResourceName(config))))
 		}
 	}
-	
+
 	return opts
 }
 

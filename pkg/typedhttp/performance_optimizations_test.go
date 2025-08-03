@@ -378,6 +378,7 @@ func TestMemoryEfficiency(t *testing.T) {
 			httpHandler := NewHTTPHandler(handler)
 			if httpHandler == nil {
 				t.Error("NewHTTPHandler should not return nil")
+				continue
 			}
 
 			// Verify cached components are created

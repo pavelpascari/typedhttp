@@ -140,7 +140,7 @@ func (s *UserService) Update(ctx context.Context, req models.UpdateUserRequest) 
 func (s *UserService) Delete(ctx context.Context, req models.DeleteUserRequest) (models.DeleteUserResponse, error) {
 	// Simulate user deletion
 	// In a real app, this would check if user exists and delete from storage
-	
+
 	return models.DeleteUserResponse{
 		Message: "User deleted successfully",
 	}, nil

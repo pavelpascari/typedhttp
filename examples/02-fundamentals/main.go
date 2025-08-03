@@ -198,7 +198,7 @@ type ListUsersHandler struct {
 
 func (h *ListUsersHandler) Handle(ctx context.Context, req ListUsersRequest) (ListUsersResponse, error) {
 	users, total := h.store.List(req.Limit, req.Offset, req.Search)
-	
+
 	return ListUsersResponse{
 		Users:  users,
 		Total:  total,

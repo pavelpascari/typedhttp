@@ -4,7 +4,7 @@ import (
 	"context"
 	"testing"
 	"time"
-	
+
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -120,14 +120,14 @@ func (s *mockUserService) Update(ctx context.Context, req UpdateUserRequest) (Up
 	if !exists {
 		return UpdateUserResponse{}, NewNotFoundError("user", req.ID)
 	}
-	
+
 	if req.Name != "" {
 		user.Name = req.Name
 	}
 	if req.Email != "" {
 		user.Email = req.Email
 	}
-	
+
 	s.users[req.ID] = user
 	return UpdateUserResponse{
 		User:    user,
@@ -140,7 +140,7 @@ func (s *mockUserService) Delete(ctx context.Context, req DeleteUserRequest) (De
 	if !exists {
 		return DeleteUserResponse{}, NewNotFoundError("user", req.ID)
 	}
-	
+
 	delete(s.users, req.ID)
 	return DeleteUserResponse{
 		Message: "User deleted successfully",
@@ -166,7 +166,7 @@ func TestDomainRouter_WithMiddleware(t *testing.T) {
 			},
 		},
 	}
-	
+
 	router := NewDomainRouter("/api/v1", middleware...)
 	assert.NotNil(t, router)
 	assert.Equal(t, "/api/v1", router.pathPrefix)
@@ -177,7 +177,7 @@ func TestResource_Registration(t *testing.T) {
 	// Test that resource registration creates the expected handlers
 	router := NewDomainRouter("/api/v1")
 	service := newMockUserService()
-	
+
 	config := ResourceConfig{
 		Tags: []string{"users"},
 		Operations: map[string]OperationConfig{
@@ -203,13 +203,13 @@ func TestResource_Registration(t *testing.T) {
 			},
 		},
 	}
-	
+
 	Resource(router, "/users", service, config)
-	
+
 	// Check that handlers were registered
 	handlers := router.GetHandlers()
 	require.Len(t, handlers, 5) // GET, LIST, POST, PUT, DELETE
-	
+
 	// Verify path generation and method distribution
 	pathMethodCounts := make(map[string]map[string]int)
 	for _, handler := range handlers {
@@ -217,19 +217,19 @@ func TestResource_Registration(t *testing.T) {
 			pathMethodCounts[handler.Path] = make(map[string]int)
 		}
 		pathMethodCounts[handler.Path][handler.Method]++
-		
+
 		// Check that metadata is properly set
 		assert.Contains(t, handler.Metadata.Tags, "users")
 		assert.NotEmpty(t, handler.Metadata.Summary)
 	}
-	
+
 	// Verify we have the expected path/method combinations
 	// Collection path: /api/v1/users - should have GET (list) and POST (create)
 	collectionPath := "/api/v1/users"
 	assert.Contains(t, pathMethodCounts, collectionPath)
 	assert.Equal(t, 1, pathMethodCounts[collectionPath]["GET"])  // LIST operation
 	assert.Equal(t, 1, pathMethodCounts[collectionPath]["POST"]) // CREATE operation
-	
+
 	// Item path: /api/v1/users/{id} - should have GET (item), PUT, DELETE
 	itemPath := "/api/v1/users/{id}"
 	assert.Contains(t, pathMethodCounts, itemPath)
@@ -242,7 +242,7 @@ func TestResource_SelectiveOperations(t *testing.T) {
 	// Test that only enabled operations are registered
 	router := NewDomainRouter("/api/v1")
 	service := newMockUserService()
-	
+
 	config := ResourceConfig{
 		Tags: []string{"users"},
 		Operations: map[string]OperationConfig{
@@ -251,7 +251,7 @@ func TestResource_SelectiveOperations(t *testing.T) {
 				Enabled: true,
 			},
 			"LIST": {
-				Summary: "List all users", 
+				Summary: "List all users",
 				Enabled: true,
 			},
 			"POST": {
@@ -265,19 +265,19 @@ func TestResource_SelectiveOperations(t *testing.T) {
 			},
 		},
 	}
-	
+
 	Resource(router, "/users", service, config)
-	
+
 	// Should only have 2 handlers (GET and LIST)
 	handlers := router.GetHandlers()
 	assert.Len(t, handlers, 2)
-	
+
 	// Verify only GET and LIST operations
 	methods := make(map[string]bool)
 	for _, handler := range handlers {
 		methods[handler.Method] = true
 	}
-	
+
 	assert.True(t, methods["GET"])
 	assert.False(t, methods["POST"])
 	assert.False(t, methods["PUT"])
@@ -288,17 +288,17 @@ func TestResource_DefaultConfiguration(t *testing.T) {
 	// Test resource registration with minimal configuration
 	router := NewDomainRouter("/api/v1")
 	service := newMockUserService()
-	
+
 	config := ResourceConfig{
 		Tags: []string{"users"},
 	}
-	
+
 	Resource(router, "/users", service, config)
-	
+
 	// All operations should be enabled by default
 	handlers := router.GetHandlers()
 	assert.Len(t, handlers, 5)
-	
+
 	// Check that default summaries are generated
 	for _, handler := range handlers {
 		assert.NotEmpty(t, handler.Metadata.Summary)
@@ -309,32 +309,32 @@ func TestResource_DefaultConfiguration(t *testing.T) {
 func TestResourceHandler_MethodDelegation(t *testing.T) {
 	// Test that the resource handler correctly delegates to service methods
 	service := newMockUserService()
-	
+
 	// Test Get operation
 	getHandler := &resourceHandler[GetUserRequest, GetUserResponse]{
 		service:   service,
 		operation: "Get",
 	}
-	
+
 	ctx := context.Background()
 	req := GetUserRequest{ID: "1"}
-	
+
 	resp, err := getHandler.Handle(ctx, req)
 	require.NoError(t, err)
 	assert.Equal(t, "1", resp.User.ID)
 	assert.Equal(t, "John Doe", resp.User.Name)
-	
+
 	// Test Create operation
 	createHandler := &resourceHandler[CreateUserRequest, CreateUserResponse]{
 		service:   service,
 		operation: "Create",
 	}
-	
+
 	createReq := CreateUserRequest{
 		Name:  "Jane Doe",
 		Email: "jane@example.com",
 	}
-	
+
 	createResp, err := createHandler.Handle(ctx, createReq)
 	require.NoError(t, err)
 	assert.Equal(t, "Jane Doe", createResp.User.Name)
@@ -345,18 +345,18 @@ func TestResourceHandler_MethodDelegation(t *testing.T) {
 func TestResourceHandler_ErrorHandling(t *testing.T) {
 	// Test error handling in resource handler
 	service := newMockUserService()
-	
+
 	handler := &resourceHandler[GetUserRequest, GetUserResponse]{
 		service:   service,
 		operation: "Get",
 	}
-	
+
 	ctx := context.Background()
 	req := GetUserRequest{ID: "nonexistent"}
-	
+
 	_, err := handler.Handle(ctx, req)
 	require.Error(t, err)
-	
+
 	// Should be a NotFoundError
 	var notFoundErr *NotFoundError
 	assert.ErrorAs(t, err, &notFoundErr)
@@ -367,18 +367,18 @@ func TestResourceHandler_ErrorHandling(t *testing.T) {
 func TestResourceHandler_InvalidMethod(t *testing.T) {
 	// Test behavior with invalid method name
 	service := newMockUserService()
-	
+
 	handler := &resourceHandler[GetUserRequest, GetUserResponse]{
 		service:   service,
 		operation: "NonexistentMethod",
 	}
-	
+
 	ctx := context.Background()
 	req := GetUserRequest{ID: "1"}
-	
+
 	_, err := handler.Handle(ctx, req)
 	require.Error(t, err)
-	assert.Contains(t, err.Error(), "method NonexistentMethod not found")
+	assert.Contains(t, err.Error(), "method not found on service: NonexistentMethod")
 }
 
 func TestBuildOperationOptions(t *testing.T) {
@@ -393,11 +393,11 @@ func TestBuildOperationOptions(t *testing.T) {
 			},
 		},
 	}
-	
+
 	// Test with existing operation config
 	opts := buildOperationOptions("GET", config)
 	assert.Len(t, opts, 4) // base tags + summary + description + operation tags
-	
+
 	// Test with default operation (no config)
 	opts = buildOperationOptions("POST", config)
 	assert.Len(t, opts, 2) // base tags + default summary
@@ -408,10 +408,10 @@ func TestInferResourceName(t *testing.T) {
 	config := ResourceConfig{
 		Tags: []string{"users"},
 	}
-	
+
 	name := inferResourceName(config)
 	assert.Equal(t, "user", name) // Should remove trailing 's'
-	
+
 	// Test with no tags
 	config = ResourceConfig{}
 	name = inferResourceName(config)

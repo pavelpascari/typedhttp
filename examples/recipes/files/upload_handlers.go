@@ -17,11 +17,11 @@ import (
 
 // File upload configuration
 type UploadConfig struct {
-	MaxFileSize    int64    // Maximum file size in bytes (default: 10MB)
-	AllowedTypes   []string // Allowed MIME types
-	AllowedExts    []string // Allowed file extensions
-	UploadDir      string   // Upload directory
-	RequireAuth    bool     // Whether authentication is required
+	MaxFileSize  int64    // Maximum file size in bytes (default: 10MB)
+	AllowedTypes []string // Allowed MIME types
+	AllowedExts  []string // Allowed file extensions
+	UploadDir    string   // Upload directory
+	RequireAuth  bool     // Whether authentication is required
 }
 
 // Default upload configuration
@@ -44,14 +44,14 @@ func DefaultUploadConfig() UploadConfig {
 
 // File metadata
 type FileInfo struct {
-	ID          string    `json:"id"`
-	Filename    string    `json:"filename"`
-	OriginalName string   `json:"original_name"`
-	Size        int64     `json:"size"`
-	ContentType string    `json:"content_type"`
-	URL         string    `json:"url"`
-	UploadedAt  time.Time `json:"uploaded_at"`
-	UploadedBy  string    `json:"uploaded_by,omitempty"`
+	ID           string    `json:"id"`
+	Filename     string    `json:"filename"`
+	OriginalName string    `json:"original_name"`
+	Size         int64     `json:"size"`
+	ContentType  string    `json:"content_type"`
+	URL          string    `json:"url"`
+	UploadedAt   time.Time `json:"uploaded_at"`
+	UploadedBy   string    `json:"uploaded_by,omitempty"`
 }
 
 // Storage interface for different storage backends
@@ -241,7 +241,7 @@ func (h *UploadMultipleHandler) validateFile(fileHeader *multipart.FileHeader) e
 func validateFile(fileHeader *multipart.FileHeader, config UploadConfig) error {
 	// Check file size
 	if fileHeader.Size > config.MaxFileSize {
-		return fmt.Errorf("file size %d bytes exceeds maximum allowed size %d bytes", 
+		return fmt.Errorf("file size %d bytes exceeds maximum allowed size %d bytes",
 			fileHeader.Size, config.MaxFileSize)
 	}
 
@@ -394,7 +394,7 @@ func NewLocalFileStorage(baseDir, baseURL string) *LocalFileStorage {
 func (s *LocalFileStorage) SaveFile(ctx context.Context, file multipart.File, filename string, metadata FileMetadata) (*FileInfo, error) {
 	// In production, implement actual file saving logic
 	// This is a simplified example
-	
+
 	fileInfo := &FileInfo{
 		ID:           generateFileID(),
 		Filename:     filename,
@@ -412,7 +412,7 @@ func (s *LocalFileStorage) SaveFile(ctx context.Context, file multipart.File, fi
 	//     return nil, err
 	// }
 	// defer dst.Close()
-	// 
+	//
 	// _, err = io.Copy(dst, file)
 	// if err != nil {
 	//     return nil, err

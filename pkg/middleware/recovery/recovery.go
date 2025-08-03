@@ -146,14 +146,14 @@ func (m *PanicRecoveryMiddleware) handlePanic(w http.ResponseWriter, r *http.Req
 	// Write error response
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(m.config.StatusCode)
-	
+
 	// Use custom error message if custom handler provided, otherwise default message
 	errorMessage := "internal server error"
 	if m.config.PanicHandler != nil && err != nil {
 		errorMessage = err.Error()
 	}
-	
-	json.NewEncoder(w).Encode(map[string]string{
+
+	_ = json.NewEncoder(w).Encode(map[string]string{
 		"error": errorMessage,
 	})
 }
@@ -176,7 +176,7 @@ type CircuitBreakerCounts struct {
 }
 
 type CircuitBreakerConfig struct {
-	ServiceName     string
+	ServiceName      string
 	FailureThreshold int
 	RecoveryTimeout  time.Duration
 	MaxRequests      int
@@ -184,11 +184,11 @@ type CircuitBreakerConfig struct {
 }
 
 type CircuitBreakerMiddleware struct {
-	config       CircuitBreakerConfig
-	state        CircuitBreakerState
-	counts       CircuitBreakerCounts
-	expiry       time.Time
-	mu           sync.RWMutex
+	config CircuitBreakerConfig
+	state  CircuitBreakerState
+	counts CircuitBreakerCounts
+	expiry time.Time
+	mu     sync.RWMutex
 }
 
 type CircuitBreakerOption func(*CircuitBreakerConfig)
@@ -343,7 +343,7 @@ func (cb *CircuitBreakerMiddleware) HTTPMiddleware() func(http.Handler) http.Han
 func (cb *CircuitBreakerMiddleware) writeCircuitBreakerError(w http.ResponseWriter) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusServiceUnavailable)
-	json.NewEncoder(w).Encode(map[string]string{
+	_ = json.NewEncoder(w).Encode(map[string]string{
 		"error": "circuit breaker open",
 	})
 }
@@ -361,12 +361,12 @@ func (rw *circuitBreakerResponseWriter) WriteHeader(code int) {
 
 // Retry Middleware
 type RetryConfig struct {
-	MaxRetries         int
-	InitialDelay       time.Duration
-	BackoffMultiplier  float64
-	MaxDelay           time.Duration
-	RetryableErrors    []error
-	RetryCondition     func(error) bool
+	MaxRetries        int
+	InitialDelay      time.Duration
+	BackoffMultiplier float64
+	MaxDelay          time.Duration
+	RetryableErrors   []error
+	RetryCondition    func(error) bool
 }
 
 type RetryMiddleware struct {
@@ -455,7 +455,7 @@ func (m *RetryMiddleware) HTTPMiddleware() func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			var lastErr error
-			
+
 			for attempt := 0; attempt <= m.config.MaxRetries; attempt++ {
 				if attempt > 0 {
 					// Wait before retry
@@ -467,7 +467,7 @@ func (m *RetryMiddleware) HTTPMiddleware() func(http.Handler) http.Handler {
 				rr := &retryResponseRecorder{
 					ResponseWriter: w,
 					statusCode:     http.StatusOK,
-					body:          make([]byte, 0),
+					body:           make([]byte, 0),
 				}
 
 				next.ServeHTTP(rr, r)
@@ -506,7 +506,7 @@ func (m *RetryMiddleware) HTTPMiddleware() func(http.Handler) http.Handler {
 // ExecuteWithRetry executes a function with retry logic
 func (m *RetryMiddleware) ExecuteWithRetry(ctx context.Context, fn func() error) error {
 	var lastErr error
-	
+
 	for attempt := 0; attempt <= m.config.MaxRetries; attempt++ {
 		if attempt > 0 {
 			delay := m.calculateDelay(attempt - 1)
