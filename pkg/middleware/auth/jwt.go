@@ -15,11 +15,19 @@ import (
 
 // Common errors
 var (
-	ErrTokenMissing     = errors.New("authentication token missing")
-	ErrTokenInvalid     = errors.New("authentication token invalid")
-	ErrTokenExpired     = errors.New("authentication token expired")
-	ErrInvalidSignature = errors.New("invalid token signature")
-	ErrInvalidClaims    = errors.New("invalid token claims")
+	ErrTokenMissing             = errors.New("authentication token missing")
+	ErrTokenInvalid             = errors.New("authentication token invalid")
+	ErrTokenExpired             = errors.New("authentication token expired")
+	ErrInvalidSignature         = errors.New("invalid token signature")
+	ErrInvalidClaims            = errors.New("invalid token claims")
+	ErrUnexpectedSigningMethod  = errors.New("unexpected signing method")
+	ErrUnsupportedSigningMethod = errors.New("unsupported signing method")
+	ErrNoHTTPRequestInContext   = errors.New("authentication failed: no HTTP request in context")
+	ErrAuthTokenMissing         = errors.New("authentication failed: token missing")
+	ErrRefreshTokenNotEnabled   = errors.New("refresh token support not enabled")
+	ErrNotRefreshToken          = errors.New("invalid refresh token: not a refresh token")
+	ErrMissingUserID            = errors.New("invalid refresh token: missing user_id")
+	ErrTokenSigning             = errors.New("failed to sign token")
 )
 
 // User represents an authenticated user
@@ -41,19 +49,20 @@ type contextKey string
 
 const (
 	UserContextKey contextKey = "user"
+	HTTPRequestKey contextKey = "http_request"
 )
 
 // JWTConfig holds JWT middleware configuration
 type JWTConfig struct {
-	Secret         []byte
-	PrivateKey     *rsa.PrivateKey
-	PublicKey      *rsa.PublicKey
-	TokenHeader    string
-	TokenPrefix    string
-	SigningMethod  jwt.SigningMethod
-	TokenExpiry    time.Duration
+	Secret          []byte
+	PrivateKey      *rsa.PrivateKey
+	PublicKey       *rsa.PublicKey
+	TokenHeader     string
+	TokenPrefix     string
+	SigningMethod   jwt.SigningMethod
+	TokenExpiry     time.Duration
 	ClaimsExtractor func(jwt.MapClaims) (*User, error)
-	RefreshSupport bool
+	RefreshSupport  bool
 }
 
 // JWTMiddleware provides JWT authentication middleware
@@ -117,11 +126,11 @@ func WithRefreshTokenSupport(enabled bool) JWTOption {
 // NewJWTMiddleware creates a new JWT middleware with the given secret and options
 func NewJWTMiddleware(secret []byte, opts ...JWTOption) *JWTMiddleware {
 	config := JWTConfig{
-		Secret:        secret,
-		TokenHeader:   "Authorization",
-		TokenPrefix:   "Bearer ",
-		SigningMethod: jwt.SigningMethodHS256,
-		TokenExpiry:   1 * time.Hour,
+		Secret:          secret,
+		TokenHeader:     "Authorization",
+		TokenPrefix:     "Bearer ",
+		SigningMethod:   jwt.SigningMethodHS256,
+		TokenExpiry:     1 * time.Hour,
 		ClaimsExtractor: defaultClaimsExtractor,
 	}
 
@@ -161,7 +170,7 @@ func (m *JWTMiddleware) ValidateToken(tokenString string) (jwt.MapClaims, error)
 	token, err := jwt.Parse(tokenString, func(token *jwt.Token) (interface{}, error) {
 		// Validate signing method
 		if token.Method != m.config.SigningMethod {
-			return nil, fmt.Errorf("unexpected signing method: %v", token.Header["alg"])
+			return nil, fmt.Errorf("%w: %v", ErrUnexpectedSigningMethod, token.Header["alg"])
 		}
 
 		// Return the appropriate key based on signing method
@@ -171,10 +180,9 @@ func (m *JWTMiddleware) ValidateToken(tokenString string) (jwt.MapClaims, error)
 		case jwt.SigningMethodRS256:
 			return m.config.PublicKey, nil
 		default:
-			return nil, fmt.Errorf("unsupported signing method: %v", m.config.SigningMethod)
+			return nil, fmt.Errorf("%w: %v", ErrUnsupportedSigningMethod, m.config.SigningMethod)
 		}
 	})
-
 	if err != nil {
 		if strings.Contains(err.Error(), "expired") {
 			return nil, ErrTokenExpired
@@ -182,6 +190,7 @@ func (m *JWTMiddleware) ValidateToken(tokenString string) (jwt.MapClaims, error)
 		if strings.Contains(err.Error(), "signature") {
 			return nil, ErrInvalidSignature
 		}
+
 		return nil, ErrTokenInvalid
 	}
 
@@ -205,6 +214,7 @@ func (m *JWTMiddleware) HTTPMiddleware() func(http.Handler) http.Handler {
 			tokenString, ok := m.ExtractToken(r)
 			if !ok {
 				m.writeError(w, http.StatusUnauthorized, "authentication token missing")
+
 				return
 			}
 
@@ -212,6 +222,7 @@ func (m *JWTMiddleware) HTTPMiddleware() func(http.Handler) http.Handler {
 			claims, err := m.ValidateToken(tokenString)
 			if err != nil {
 				m.writeError(w, http.StatusUnauthorized, "authentication token invalid: "+err.Error())
+
 				return
 			}
 
@@ -219,6 +230,7 @@ func (m *JWTMiddleware) HTTPMiddleware() func(http.Handler) http.Handler {
 			user, err := m.config.ClaimsExtractor(claims)
 			if err != nil {
 				m.writeError(w, http.StatusUnauthorized, "invalid token claims: "+err.Error())
+
 				return
 			}
 
@@ -232,15 +244,15 @@ func (m *JWTMiddleware) HTTPMiddleware() func(http.Handler) http.Handler {
 // Before implements TypedPreMiddleware interface
 func (m *JWTMiddleware) Before(ctx context.Context, req interface{}) (context.Context, error) {
 	// Extract HTTP request from context
-	httpReq, ok := ctx.Value("http_request").(*http.Request)
+	httpReq, ok := ctx.Value(HTTPRequestKey).(*http.Request)
 	if !ok {
-		return ctx, errors.New("authentication failed: no HTTP request in context")
+		return ctx, ErrNoHTTPRequestInContext
 	}
 
 	// Extract token
 	tokenString, ok := m.ExtractToken(httpReq)
 	if !ok {
-		return ctx, errors.New("authentication failed: token missing")
+		return ctx, ErrAuthTokenMissing
 	}
 
 	// Validate token
@@ -262,7 +274,7 @@ func (m *JWTMiddleware) Before(ctx context.Context, req interface{}) (context.Co
 // GenerateTokenPair generates access and refresh token pair
 func (m *JWTMiddleware) GenerateTokenPair(user *User) (*TokenPair, error) {
 	if !m.config.RefreshSupport {
-		return nil, errors.New("refresh token support not enabled")
+		return nil, ErrRefreshTokenNotEnabled
 	}
 
 	now := time.Now()
@@ -319,13 +331,13 @@ func (m *JWTMiddleware) RefreshAccessToken(refreshToken string) (*TokenPair, err
 	// Verify it's a refresh token
 	tokenType, ok := claims["type"].(string)
 	if !ok || tokenType != "refresh" {
-		return nil, errors.New("invalid refresh token: not a refresh token")
+		return nil, ErrNotRefreshToken
 	}
 
 	// Extract user ID
 	userID, ok := claims["user_id"].(string)
 	if !ok {
-		return nil, errors.New("invalid refresh token: missing user_id")
+		return nil, ErrMissingUserID
 	}
 
 	// Create new access token (simplified - in real implementation you'd fetch user data)
@@ -341,11 +353,19 @@ func (m *JWTMiddleware) RefreshAccessToken(refreshToken string) (*TokenPair, err
 func (m *JWTMiddleware) signToken(token *jwt.Token) (string, error) {
 	switch m.config.SigningMethod {
 	case jwt.SigningMethodHS256, jwt.SigningMethodHS512:
-		return token.SignedString(m.config.Secret)
+		tokenStr, err := token.SignedString(m.config.Secret)
+		if err != nil {
+			return "", fmt.Errorf("%w: %w", ErrTokenSigning, err)
+		}
+		return tokenStr, nil
 	case jwt.SigningMethodRS256:
-		return token.SignedString(m.config.PrivateKey)
+		tokenStr, err := token.SignedString(m.config.PrivateKey)
+		if err != nil {
+			return "", fmt.Errorf("%w: %w", ErrTokenSigning, err)
+		}
+		return tokenStr, nil
 	default:
-		return "", fmt.Errorf("unsupported signing method: %v", m.config.SigningMethod)
+		return "", fmt.Errorf("%w: %v", ErrUnsupportedSigningMethod, m.config.SigningMethod)
 	}
 }
 
@@ -353,7 +373,7 @@ func (m *JWTMiddleware) signToken(token *jwt.Token) (string, error) {
 func (m *JWTMiddleware) writeError(w http.ResponseWriter, statusCode int, message string) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(statusCode)
-	json.NewEncoder(w).Encode(map[string]string{
+	_ = json.NewEncoder(w).Encode(map[string]string{
 		"error": message,
 	})
 }

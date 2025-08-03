@@ -21,7 +21,7 @@ func main() {
 	// For demo, we'll just show the public API
 	// In real microservices, each would be a separate deployment
 	publicAPIConfig := services["public-api"]
-	
+
 	// Setup router for public API
 	appRouter := router.Setup(models.PublicAPI)
 

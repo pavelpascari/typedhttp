@@ -148,14 +148,18 @@ func TestMiddlewareSchemaTransformation(t *testing.T) {
 				// Check data field contains original schema
 				dataField, ok := properties["data"].(map[string]interface{})
 				require.True(t, ok)
-				assert.True(t, dataField["nullable"].(bool))
+				nullable, ok := dataField["nullable"].(bool)
+				require.True(t, ok)
+				assert.True(t, nullable)
 				assert.Equal(t, "The actual response data", dataField["description"])
 
 				// Check error field
 				errorField, ok := properties["error"].(map[string]interface{})
 				require.True(t, ok)
 				assert.Equal(t, "string", errorField["type"])
-				assert.True(t, errorField["nullable"].(bool))
+				errorNullable, ok := errorField["nullable"].(bool)
+				require.True(t, ok)
+				assert.True(t, errorNullable)
 
 				// Check success field
 				successField, ok := properties["success"].(map[string]interface{})
@@ -166,7 +170,9 @@ func TestMiddlewareSchemaTransformation(t *testing.T) {
 				metaField, ok := properties["meta"].(map[string]interface{})
 				require.True(t, ok)
 				assert.Equal(t, "object", metaField["type"])
-				assert.True(t, metaField["nullable"].(bool))
+				metaNullable, ok := metaField["nullable"].(bool)
+				require.True(t, ok)
+				assert.True(t, metaNullable)
 
 				metaProperties, ok := metaField["properties"].(map[string]interface{})
 				require.True(t, ok)
@@ -211,13 +217,13 @@ func TestEnvelopeMiddlewareDetection(t *testing.T) {
 	})
 
 	tests := []struct {
-		name                 string
-		middleware           []typedhttp.MiddlewareEntry
+		name                string
+		middleware          []typedhttp.MiddlewareEntry
 		expectedHasEnvelope bool
 	}{
 		{
-			name:                 "no_middleware",
-			middleware:           []typedhttp.MiddlewareEntry{},
+			name:                "no_middleware",
+			middleware:          []typedhttp.MiddlewareEntry{},
 			expectedHasEnvelope: false,
 		},
 		{

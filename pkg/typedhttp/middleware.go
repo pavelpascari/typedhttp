@@ -253,32 +253,3 @@ func (b *MiddlewareBuilder) Build() []MiddlewareEntry {
 
 	return b.entries
 }
-
-// TypedMiddlewareChain contains typed middleware organized by phase.
-type TypedMiddlewareChain[TRequest, TResponse any] struct {
-	preMiddleware  []TypedPreMiddleware[TRequest]
-	postMiddleware []TypedPostMiddleware[TResponse]
-	fullMiddleware []TypedMiddleware[TRequest, TResponse]
-}
-
-// extractTypedMiddleware extracts typed middleware from middleware entries.
-func extractTypedMiddleware[TRequest, TResponse any](entries []MiddlewareEntry) TypedMiddlewareChain[TRequest, TResponse] {
-	chain := TypedMiddlewareChain[TRequest, TResponse]{
-		preMiddleware:  make([]TypedPreMiddleware[TRequest], 0),
-		postMiddleware: make([]TypedPostMiddleware[TResponse], 0),
-		fullMiddleware: make([]TypedMiddleware[TRequest, TResponse], 0),
-	}
-
-	for _, entry := range entries {
-		// Check for the most specific interface first (TypedMiddleware).
-		if fullMW, ok := entry.Middleware.(TypedMiddleware[TRequest, TResponse]); ok {
-			chain.fullMiddleware = append(chain.fullMiddleware, fullMW)
-		} else if preMW, ok := entry.Middleware.(TypedPreMiddleware[TRequest]); ok {
-			chain.preMiddleware = append(chain.preMiddleware, preMW)
-		} else if postMW, ok := entry.Middleware.(TypedPostMiddleware[TResponse]); ok {
-			chain.postMiddleware = append(chain.postMiddleware, postMW)
-		}
-	}
-
-	return chain
-}

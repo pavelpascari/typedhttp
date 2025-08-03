@@ -15,6 +15,8 @@ import (
 const (
 	// MaxFormMemory is the maximum memory to use for parsing multipart forms (32MB).
 	MaxFormMemory = 32 << 20
+	// JSONFieldTagValue is the value for the json_field tag that indicates a field should be parsed as JSON.
+	JSONFieldTagValue = "true"
 )
 
 // Error variables for static error handling.
@@ -213,7 +215,7 @@ func (d *FormDecoder[T]) getFormValue(r *http.Request, formName, defaultValue st
 
 // isJSONField checks if a field should be parsed as JSON.
 func (d *FormDecoder[T]) isJSONField(field *reflect.StructField, formValue string) bool {
-	return field.Tag.Get("json_field") == "true" ||
+	return field.Tag.Get("json_field") == JSONFieldTagValue ||
 		strings.HasPrefix(formValue, "{") ||
 		strings.HasPrefix(formValue, "[")
 }

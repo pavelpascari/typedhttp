@@ -28,11 +28,11 @@ type ValidationFunc func(value interface{}) error
 
 // ValidationConfig holds validation middleware configuration
 type ValidationConfig struct {
-	ValidateJSON       bool
-	ValidateStruct     bool
-	StrictValidation   bool
-	CustomValidators   map[string]ValidationFunc
-	ErrorHandler       func(error) error
+	ValidateJSON     bool
+	ValidateStruct   bool
+	StrictValidation bool
+	CustomValidators map[string]ValidationFunc
+	ErrorHandler     func(error) error
 }
 
 // ValidationMiddleware provides request validation functionality
@@ -176,7 +176,7 @@ func (m *ValidationMiddleware) validateStruct(obj interface{}) error {
 	for i := 0; i < v.NumField(); i++ {
 		field := v.Field(i)
 		fieldType := t.Field(i)
-		
+
 		// Skip unexported fields
 		if !field.CanInterface() {
 			continue
@@ -200,7 +200,7 @@ func (m *ValidationMiddleware) validateStruct(obj interface{}) error {
 // applyValidationRules applies validation rules from struct tags
 func (m *ValidationMiddleware) applyValidationRules(value interface{}, rules, fieldName string) error {
 	ruleParts := strings.Split(rules, ",")
-	
+
 	for _, rule := range ruleParts {
 		rule = strings.TrimSpace(rule)
 		if rule == "" {
@@ -239,11 +239,11 @@ func (m *ValidationMiddleware) applyValidationRule(value interface{}, rule, fiel
 		m.mu.RLock()
 		validator, exists := m.config.CustomValidators[rule]
 		m.mu.RUnlock()
-		
+
 		if exists {
 			return validator(value)
 		}
-		
+
 		if m.config.StrictValidation {
 			return fmt.Errorf("unknown validation rule: %s", rule)
 		}
@@ -336,13 +336,13 @@ func (m *ValidationMiddleware) validateJSONStructure(data interface{}) error {
 				return err
 			}
 		}
-		
+
 		if email, ok := v["email"]; ok {
 			if err := m.validateJSONField(email, "email", "required,email"); err != nil {
 				return err
 			}
 		}
-		
+
 		if age, ok := v["age"]; ok {
 			if err := m.validateJSONField(age, "age", "min=18,max=120"); err != nil {
 				return err
@@ -360,7 +360,7 @@ func (m *ValidationMiddleware) validateJSONField(value interface{}, fieldName, r
 			value = int(floatVal)
 		}
 	}
-	
+
 	return m.applyValidationRules(value, rules, fieldName)
 }
 
@@ -376,8 +376,8 @@ func (m *ValidationMiddleware) writeError(w http.ResponseWriter, statusCode int,
 // Compression constants
 const (
 	DefaultCompressionLevel = 6
-	BestCompression        = 9
-	DefaultMinSize         = 1024
+	BestCompression         = 9
+	DefaultMinSize          = 1024
 )
 
 // CompressionConfig holds compression middleware configuration
@@ -504,30 +504,30 @@ func (cw *compressionWriter) WriteHeader(statusCode int) {
 func (cw *compressionWriter) Write(data []byte) (int, error) {
 	if !cw.wrote {
 		cw.wrote = true
-		
+
 		// Check if content should be compressed
 		contentType := cw.Header().Get("Content-Type")
 		if cw.shouldCompress(contentType, len(data)) {
 			cw.Header().Set("Content-Encoding", "gzip")
 			cw.Header().Del("Content-Length") // Let gzip set this
-			
+
 			// Add custom headers
 			for k, v := range cw.middleware.config.Headers {
 				cw.Header().Set(k, v)
 			}
-			
+
 			// Initialize gzip writer
 			cw.gzWriter, _ = gzip.NewWriterLevel(cw.ResponseWriter, cw.middleware.config.Level)
 			defer cw.gzWriter.Close()
-			
+
 			return cw.gzWriter.Write(data)
 		}
 	}
-	
+
 	if cw.gzWriter != nil {
 		return cw.gzWriter.Write(data)
 	}
-	
+
 	return cw.ResponseWriter.Write(data)
 }
 
@@ -637,7 +637,7 @@ func (m *CORSMiddleware) HTTPMiddleware() func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			origin := r.Header.Get("Origin")
-			
+
 			// Check if origin is allowed
 			if origin != "" && !m.isOriginAllowed(origin) {
 				http.Error(w, "Origin not allowed", http.StatusForbidden)
@@ -652,7 +652,7 @@ func (m *CORSMiddleware) HTTPMiddleware() func(http.Handler) http.Handler {
 
 			// Set CORS headers for actual request
 			m.setCORSHeaders(w, origin)
-			
+
 			next.ServeHTTP(w, r)
 		})
 	}

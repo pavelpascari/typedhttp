@@ -389,7 +389,7 @@ func TestMiddlewareCompatibility(t *testing.T) {
 		}
 
 		router := NewRouter()
-		
+
 		// Register handler with middleware applied via router
 		GET(router, "/middleware/{id}", handler)
 

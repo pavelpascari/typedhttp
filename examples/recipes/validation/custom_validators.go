@@ -17,7 +17,7 @@ import (
 // Initialize custom validators
 func init() {
 	v := validator.New()
-	
+
 	// Register custom validation functions
 	v.RegisterValidation("username", validateUsername)
 	v.RegisterValidation("phone", validatePhoneNumber)
@@ -49,18 +49,18 @@ func validatePhoneNumber(fl validator.FieldLevel) bool {
 
 func validatePasswordStrength(fl validator.FieldLevel) bool {
 	password := fl.Field().String()
-	
+
 	// At least 8 characters
 	if len(password) < 8 {
 		return false
 	}
-	
+
 	// Must contain at least one uppercase, lowercase, digit, and special char
 	hasUpper := regexp.MustCompile(`[A-Z]`).MatchString(password)
 	hasLower := regexp.MustCompile(`[a-z]`).MatchString(password)
 	hasDigit := regexp.MustCompile(`\d`).MatchString(password)
 	hasSpecial := regexp.MustCompile(`[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?]`).MatchString(password)
-	
+
 	return hasUpper && hasLower && hasDigit && hasSpecial
 }
 
@@ -112,32 +112,32 @@ func luhnCheck(card string) bool {
 	// Remove spaces and hyphens
 	card = strings.ReplaceAll(card, " ", "")
 	card = strings.ReplaceAll(card, "-", "")
-	
+
 	// Must be numeric and 13-19 digits
 	if len(card) < 13 || len(card) > 19 {
 		return false
 	}
-	
+
 	sum := 0
 	alternate := false
-	
+
 	for i := len(card) - 1; i >= 0; i-- {
 		n := int(card[i] - '0')
 		if n < 0 || n > 9 {
 			return false
 		}
-		
+
 		if alternate {
 			n *= 2
 			if n > 9 {
 				n = (n % 10) + 1
 			}
 		}
-		
+
 		sum += n
 		alternate = !alternate
 	}
-	
+
 	return sum%10 == 0
 }
 
@@ -169,40 +169,40 @@ type BusinessProfileRequest struct {
 
 // Payment method validation
 type PaymentMethodRequest struct {
-	Type           string `json:"type" validate:"required,oneof=credit_card debit_card paypal crypto"`
-	CardNumber     string `json:"card_number" validate:"required_if=Type credit_card,required_if=Type debit_card,omitempty,credit_card"`
-	ExpiryMonth    int    `json:"expiry_month" validate:"required_if=Type credit_card,required_if=Type debit_card,omitempty,min=1,max=12"`
-	ExpiryYear     int    `json:"expiry_year" validate:"required_if=Type credit_card,required_if=Type debit_card,omitempty,min=2024"`
-	CVV            string `json:"cvv" validate:"required_if=Type credit_card,required_if=Type debit_card,omitempty,len=3"`
-	PayPalEmail    string `json:"paypal_email" validate:"required_if=Type paypal,omitempty,email"`
-	CryptoAddress  string `json:"crypto_address" validate:"required_if=Type crypto,omitempty,min=26,max=62"`
-	CryptoType     string `json:"crypto_type" validate:"required_if=Type crypto,omitempty,oneof=bitcoin ethereum litecoin"`
+	Type          string `json:"type" validate:"required,oneof=credit_card debit_card paypal crypto"`
+	CardNumber    string `json:"card_number" validate:"required_if=Type credit_card,required_if=Type debit_card,omitempty,credit_card"`
+	ExpiryMonth   int    `json:"expiry_month" validate:"required_if=Type credit_card,required_if=Type debit_card,omitempty,min=1,max=12"`
+	ExpiryYear    int    `json:"expiry_year" validate:"required_if=Type credit_card,required_if=Type debit_card,omitempty,min=2024"`
+	CVV           string `json:"cvv" validate:"required_if=Type credit_card,required_if=Type debit_card,omitempty,len=3"`
+	PayPalEmail   string `json:"paypal_email" validate:"required_if=Type paypal,omitempty,email"`
+	CryptoAddress string `json:"crypto_address" validate:"required_if=Type crypto,omitempty,min=26,max=62"`
+	CryptoType    string `json:"crypto_type" validate:"required_if=Type crypto,omitempty,oneof=bitcoin ethereum litecoin"`
 }
 
 // Event scheduling with date validation
 type CreateEventRequest struct {
-	Title       string    `json:"title" validate:"required,min=3,max=200"`
-	Description string    `json:"description" validate:"max=2000"`
-	StartTime   time.Time `json:"start_time" validate:"required,future_date"`
-	EndTime     time.Time `json:"end_time" validate:"required,gtfield=StartTime"`
-	Location    string    `json:"location" validate:"required,min=5,max=300"`
-	MaxAttendees int      `json:"max_attendees" validate:"required,min=1,max=10000"`
-	IsPublic    bool      `json:"is_public"`
-	Tags        []string  `json:"tags" validate:"max=10,dive,min=2,max=30"`
+	Title        string    `json:"title" validate:"required,min=3,max=200"`
+	Description  string    `json:"description" validate:"max=2000"`
+	StartTime    time.Time `json:"start_time" validate:"required,future_date"`
+	EndTime      time.Time `json:"end_time" validate:"required,gtfield=StartTime"`
+	Location     string    `json:"location" validate:"required,min=5,max=300"`
+	MaxAttendees int       `json:"max_attendees" validate:"required,min=1,max=10000"`
+	IsPublic     bool      `json:"is_public"`
+	Tags         []string  `json:"tags" validate:"max=10,dive,min=2,max=30"`
 }
 
 // Advanced validation with conditional logic
 type UserPreferencesRequest struct {
-	EmailNotifications     bool   `json:"email_notifications"`
-	SMSNotifications      bool   `json:"sms_notifications"`
-	Phone                 string `json:"phone" validate:"required_if=SMSNotifications true,omitempty,phone"`
-	MarketingEmails       bool   `json:"marketing_emails"`
-	NewsletterFrequency   string `json:"newsletter_frequency" validate:"required_if=MarketingEmails true,omitempty,oneof=daily weekly monthly"`
-	Theme                 string `json:"theme" validate:"required,oneof=light dark auto"`
-	Language              string `json:"language" validate:"required,len=2"`
-	Timezone              string `json:"timezone" validate:"required,timezone"`
-	DateFormat            string `json:"date_format" validate:"required,oneof=MM/DD/YYYY DD/MM/YYYY YYYY-MM-DD"`
-	TimeFormat            string `json:"time_format" validate:"required,oneof=12h 24h"`
+	EmailNotifications  bool   `json:"email_notifications"`
+	SMSNotifications    bool   `json:"sms_notifications"`
+	Phone               string `json:"phone" validate:"required_if=SMSNotifications true,omitempty,phone"`
+	MarketingEmails     bool   `json:"marketing_emails"`
+	NewsletterFrequency string `json:"newsletter_frequency" validate:"required_if=MarketingEmails true,omitempty,oneof=daily weekly monthly"`
+	Theme               string `json:"theme" validate:"required,oneof=light dark auto"`
+	Language            string `json:"language" validate:"required,len=2"`
+	Timezone            string `json:"timezone" validate:"required,timezone"`
+	DateFormat          string `json:"date_format" validate:"required,oneof=MM/DD/YYYY DD/MM/YYYY YYYY-MM-DD"`
+	TimeFormat          string `json:"time_format" validate:"required,oneof=12h 24h"`
 }
 
 // Handlers with validation error mapping

@@ -62,7 +62,7 @@ func main() {
 func createCombinedHandler(apiRouter http.Handler, jsonSpec, yamlSpec []byte) http.Handler {
 	// Create a new mux for documentation routes
 	docMux := http.NewServeMux()
-	
+
 	// Register documentation routes
 	docMux.HandleFunc("/openapi.json", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
@@ -232,7 +232,7 @@ Priority  10: Audit Logging Middleware</div>
 			docMux.ServeHTTP(w, r)
 			return
 		}
-		
+
 		// Route all other paths to the API router
 		apiRouter.ServeHTTP(w, r)
 	})

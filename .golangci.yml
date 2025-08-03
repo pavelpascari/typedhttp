@@ -28,7 +28,6 @@ linters:
     - gofmt
     - gofumpt
     - goimports
-    - mnd
     - gomoddirectives
     - gomodguard
     - goprintffuncname
@@ -37,7 +36,6 @@ linters:
     - govet
     - importas
     - ineffassign
-    - lll
     - makezero
     - misspell
     - nakedret

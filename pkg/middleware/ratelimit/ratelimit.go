@@ -125,6 +125,7 @@ func (b *TokenBucket) consume() bool {
 	// Try to consume a token
 	if b.tokens > 0 {
 		b.tokens--
+
 		return true
 	}
 
@@ -143,17 +144,17 @@ type IPBasedConfig struct {
 
 // IPEntry tracks requests for an IP address
 type IPEntry struct {
-	requests  []time.Time
-	mu        sync.Mutex
+	requests []time.Time
+	mu       sync.Mutex
 }
 
 // IPBasedRateLimiter implements IP-based rate limiting
 type IPBasedRateLimiter struct {
-	config     IPBasedConfig
-	ipEntries  map[string]*IPEntry
-	whitelist  map[string]bool
-	blacklist  map[string]bool
-	mu         sync.RWMutex
+	config      IPBasedConfig
+	ipEntries   map[string]*IPEntry
+	whitelist   map[string]bool
+	blacklist   map[string]bool
+	mu          sync.RWMutex
 	stopCleanup chan bool
 }
 
@@ -268,6 +269,7 @@ func (r *IPBasedRateLimiter) AllowIP(ip string) bool {
 func (r *IPBasedRateLimiter) GetActiveIPCount() int {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
+
 	return len(r.ipEntries)
 }
 
@@ -295,6 +297,7 @@ func (e *IPEntry) allow(limit int, window time.Duration) bool {
 
 	// Add current request
 	e.requests = append(e.requests, now)
+
 	return true
 }
 
@@ -316,6 +319,7 @@ func (r *IPBasedRateLimiter) cleanup() {
 				for _, reqTime := range entry.requests {
 					if reqTime.After(cutoff) {
 						hasValidRequests = true
+
 						break
 					}
 				}
@@ -343,7 +347,7 @@ type UserBasedConfig struct {
 
 // UserBasedRateLimiter implements user-based rate limiting
 type UserBasedRateLimiter struct {
-	config     UserBasedConfig
+	config      UserBasedConfig
 	userEntries map[string]*IPEntry
 	mu          sync.RWMutex
 }
@@ -418,10 +422,10 @@ func (r *UserBasedRateLimiter) AllowUser(userID, tier string) bool {
 
 // SlidingWindowRateLimiter implements sliding window rate limiting
 type SlidingWindowRateLimiter struct {
-	limit    int
-	window   time.Duration
-	entries  map[string]*IPEntry
-	mu       sync.RWMutex
+	limit   int
+	window  time.Duration
+	entries map[string]*IPEntry
+	mu      sync.RWMutex
 }
 
 // NewSlidingWindowRateLimiter creates a new sliding window rate limiter
@@ -449,36 +453,36 @@ func (r *SlidingWindowRateLimiter) Allow(key string) bool {
 	return entry.allow(r.limit, r.window)
 }
 
-// RateLimitMiddleware provides rate limiting middleware
-type RateLimitMiddleware struct {
-	limiter       RateLimiter
-	userExtractor func(interface{}) string
-	metrics       *RateLimitMetrics
+// Middleware provides rate limiting middleware
+type Middleware struct {
+	limiter        RateLimiter
+	userExtractor  func(interface{}) string
+	metrics        *Metrics
 	metricsEnabled bool
 }
 
-// RateLimitOption configures rate limit middleware
-type RateLimitOption func(*RateLimitMiddleware)
+// Option configures rate limit middleware
+type Option func(*Middleware)
 
 // WithUserExtractor sets a custom user extractor function
-func WithUserExtractor(extractor func(interface{}) string) RateLimitOption {
-	return func(m *RateLimitMiddleware) {
+func WithUserExtractor(extractor func(interface{}) string) Option {
+	return func(m *Middleware) {
 		m.userExtractor = extractor
 	}
 }
 
 // WithMetricsEnabled enables metrics collection
-func WithMetricsEnabled(enabled bool) RateLimitOption {
-	return func(m *RateLimitMiddleware) {
+func WithMetricsEnabled(enabled bool) Option {
+	return func(m *Middleware) {
 		m.metricsEnabled = enabled
 		if enabled {
-			m.metrics = &RateLimitMetrics{}
+			m.metrics = &Metrics{}
 		}
 	}
 }
 
-// RateLimitMetrics holds rate limiting metrics
-type RateLimitMetrics struct {
+// Metrics holds rate limiting metrics
+type Metrics struct {
 	TotalRequests   int64
 	AllowedRequests int64
 	DeniedRequests  int64
@@ -486,8 +490,8 @@ type RateLimitMetrics struct {
 }
 
 // NewRateLimitMiddleware creates a new rate limit middleware
-func NewRateLimitMiddleware(limiter RateLimiter, opts ...RateLimitOption) *RateLimitMiddleware {
-	middleware := &RateLimitMiddleware{
+func NewRateLimitMiddleware(limiter RateLimiter, opts ...Option) *Middleware {
+	middleware := &Middleware{
 		limiter: limiter,
 	}
 
@@ -499,7 +503,7 @@ func NewRateLimitMiddleware(limiter RateLimiter, opts ...RateLimitOption) *RateL
 }
 
 // HTTPMiddleware returns HTTP middleware function
-func (m *RateLimitMiddleware) HTTPMiddleware() func(http.Handler) http.Handler {
+func (m *Middleware) HTTPMiddleware() func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			// Extract IP from request
@@ -513,7 +517,7 @@ func (m *RateLimitMiddleware) HTTPMiddleware() func(http.Handler) http.Handler {
 
 			// Check rate limit
 			allowed := m.limiter.Allow(ip)
-			
+
 			// Update metrics
 			if m.metricsEnabled {
 				m.metrics.mu.Lock()
@@ -540,7 +544,7 @@ func (m *RateLimitMiddleware) HTTPMiddleware() func(http.Handler) http.Handler {
 }
 
 // Before implements TypedPreMiddleware interface
-func (m *RateLimitMiddleware) Before(ctx context.Context, req interface{}) (context.Context, error) {
+func (m *Middleware) Before(ctx context.Context, req interface{}) (context.Context, error) {
 	var key string
 
 	// Try to extract user ID first
@@ -569,15 +573,15 @@ func (m *RateLimitMiddleware) Before(ctx context.Context, req interface{}) (cont
 }
 
 // GetMetrics returns current metrics
-func (m *RateLimitMiddleware) GetMetrics() *RateLimitMetrics {
+func (m *Middleware) GetMetrics() *Metrics {
 	if !m.metricsEnabled {
 		return nil
 	}
-	
+
 	m.metrics.mu.RLock()
 	defer m.metrics.mu.RUnlock()
-	
-	return &RateLimitMetrics{
+
+	return &Metrics{
 		TotalRequests:   m.metrics.TotalRequests,
 		AllowedRequests: m.metrics.AllowedRequests,
 		DeniedRequests:  m.metrics.DeniedRequests,
@@ -585,7 +589,7 @@ func (m *RateLimitMiddleware) GetMetrics() *RateLimitMetrics {
 }
 
 // writeRateLimitError writes a rate limit exceeded error response
-func (m *RateLimitMiddleware) writeRateLimitError(w http.ResponseWriter, r *http.Request) {
+func (m *Middleware) writeRateLimitError(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusTooManyRequests)
 	_ = json.NewEncoder(w).Encode(map[string]string{
@@ -594,7 +598,7 @@ func (m *RateLimitMiddleware) writeRateLimitError(w http.ResponseWriter, r *http
 }
 
 // addRateLimitHeaders adds rate limit headers to response
-func (m *RateLimitMiddleware) addRateLimitHeaders(w http.ResponseWriter, _ string) {
+func (m *Middleware) addRateLimitHeaders(w http.ResponseWriter, _ string) {
 	// Default headers - in a real implementation, these would be calculated based on the limiter type.
 	w.Header().Set("X-RateLimit-Limit", "100")
 	w.Header().Set("X-RateLimit-Remaining", "99")
