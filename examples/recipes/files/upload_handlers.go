@@ -3,7 +3,6 @@ package files
 import (
 	"context"
 	"fmt"
-	"io"
 	"mime/multipart"
 	"net/http"
 	"path/filepath"
@@ -308,7 +307,7 @@ func (h *GetFileHandler) Handle(ctx context.Context, req GetFileRequest) (FileIn
 	fileInfo, err := h.storage.GetFile(ctx, req.ID)
 	if err != nil {
 		if err == ErrFileNotFound {
-			return FileInfo{}, typedhttp.NewNotFoundError("File not found")
+			return FileInfo{}, typedhttp.NewNotFoundError("File", req.ID)
 		}
 		return FileInfo{}, fmt.Errorf("failed to get file: %w", err)
 	}
@@ -338,7 +337,7 @@ func (h *DeleteFileHandler) Handle(ctx context.Context, req DeleteFileRequest) (
 	_, err := h.storage.GetFile(ctx, req.ID)
 	if err != nil {
 		if err == ErrFileNotFound {
-			return DeleteFileResponse{}, typedhttp.NewNotFoundError("File not found")
+			return DeleteFileResponse{}, typedhttp.NewNotFoundError("File", req.ID)
 		}
 		return DeleteFileResponse{}, fmt.Errorf("failed to check file: %w", err)
 	}
@@ -448,10 +447,10 @@ func SetupFileRoutes(router *typedhttp.TypedRouter, storage FileStorage, config 
 	deleteHandler := NewDeleteFileHandler(storage)
 
 	// Register routes
-	typedhttp.POST(router, "/upload", uploadHandler.Handle)
-	typedhttp.POST(router, "/upload/multiple", multiUploadHandler.Handle)
-	typedhttp.GET(router, "/files/{id}", getHandler.Handle)
-	typedhttp.DELETE(router, "/files/{id}", deleteHandler.Handle)
+	typedhttp.POST(router, "/upload", uploadHandler)
+	typedhttp.POST(router, "/upload/multiple", multiUploadHandler)
+	typedhttp.GET(router, "/files/{id}", getHandler)
+	typedhttp.DELETE(router, "/files/{id}", deleteHandler)
 }
 
 // Example usage

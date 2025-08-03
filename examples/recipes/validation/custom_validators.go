@@ -361,6 +361,6 @@ func SetupValidationRoutes(router *typedhttp.TypedRouter, userService UserServic
 	bookingHandler := &BookingHandler{}
 
 	// Register handlers with enhanced validation
-	typedhttp.POST(router, "/users", createUserHandler.Handle)
-	typedhttp.POST(router, "/bookings", bookingHandler.Handle)
+	typedhttp.POST(router, "/users", createUserHandler)
+	typedhttp.POST(router, "/bookings", bookingHandler)
 }

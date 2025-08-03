@@ -87,10 +87,10 @@ type ListUsersResponse struct {
 }
 
 type PaginationMetadata struct {
-	Page       int `json:"page"`
-	Limit      int `json:"limit"`
-	Total      int `json:"total"`
-	TotalPages int `json:"total_pages"`
+	Page       int  `json:"page"`
+	Limit      int  `json:"limit"`
+	Total      int  `json:"total"`
+	TotalPages int  `json:"total_pages"`
 	HasNext    bool `json:"has_next"`
 	HasPrev    bool `json:"has_prev"`
 }
@@ -149,7 +149,7 @@ func (r *UserResource) UpdateUser(ctx context.Context, req UpdateUserRequest) (U
 		return User{}, r.mapServiceError(err)
 	}
 	if !exists {
-		return User{}, typedhttp.NewNotFoundError("User not found")
+		return User{}, typedhttp.NewNotFoundError("User not found", req.ID)
 	}
 
 	user, err := r.service.UpdateUser(ctx, req.ID, req)
@@ -168,7 +168,7 @@ func (r *UserResource) DeleteUser(ctx context.Context, req DeleteUserRequest) er
 		return r.mapServiceError(err)
 	}
 	if !exists {
-		return typedhttp.NewNotFoundError("User not found")
+		return typedhttp.NewNotFoundError("User not found", req.ID)
 	}
 
 	err = r.service.DeleteUser(ctx, req.ID)
@@ -196,7 +196,7 @@ func (r *UserResource) ListUsers(ctx context.Context, req ListUsersRequest) (Lis
 func (r *UserResource) mapServiceError(err error) error {
 	switch {
 	case err == ErrUserNotFound:
-		return typedhttp.NewNotFoundError("User not found")
+		return typedhttp.NewNotFoundError("User not found", "")
 	case err == ErrUserAlreadyExists:
 		return typedhttp.NewConflictError("User already exists")
 	case err == ErrInvalidUserData:
@@ -213,22 +213,76 @@ var (
 	ErrInvalidUserData   = fmt.Errorf("invalid user data")
 )
 
+// Handler wrappers for TypedHTTP registration
+type GetUserHandler struct {
+	resource *UserResource
+}
+
+func (h *GetUserHandler) Handle(ctx context.Context, req GetUserRequest) (User, error) {
+	return h.resource.GetUser(ctx, req)
+}
+
+type CreateUserHandler struct {
+	resource *UserResource
+}
+
+func (h *CreateUserHandler) Handle(ctx context.Context, req CreateUserRequest) (CreateUserResponse, error) {
+	return h.resource.CreateUser(ctx, req)
+}
+
+type UpdateUserHandler struct {
+	resource *UserResource
+}
+
+func (h *UpdateUserHandler) Handle(ctx context.Context, req UpdateUserRequest) (User, error) {
+	return h.resource.UpdateUser(ctx, req)
+}
+
+type DeleteUserHandler struct {
+	resource *UserResource
+}
+
+func (h *DeleteUserHandler) Handle(ctx context.Context, req DeleteUserRequest) (DeleteResponse, error) {
+	err := h.resource.DeleteUser(ctx, req)
+	if err != nil {
+		return DeleteResponse{}, err
+	}
+	return DeleteResponse{
+		Message: fmt.Sprintf("User %s deleted successfully", req.ID),
+	}, nil
+}
+
+type ListUsersHandler struct {
+	resource *UserResource
+}
+
+func (h *ListUsersHandler) Handle(ctx context.Context, req ListUsersRequest) (ListUsersResponse, error) {
+	return h.resource.ListUsers(ctx, req)
+}
+
 // Router setup function
 func SetupUserRoutes(router *typedhttp.TypedRouter, service UserService) {
 	resource := NewUserResource(service)
 
+	// Create handler wrappers for each method
+	getUserHandler := &GetUserHandler{resource: resource}
+	createUserHandler := &CreateUserHandler{resource: resource}
+	updateUserHandler := &UpdateUserHandler{resource: resource}
+	deleteUserHandler := &DeleteUserHandler{resource: resource}
+	listUsersHandler := &ListUsersHandler{resource: resource}
+
 	// Register all CRUD endpoints
-	typedhttp.GET(router, "/users/{id}", resource.GetUser)
-	typedhttp.POST(router, "/users", resource.CreateUser)
-	typedhttp.PUT(router, "/users/{id}", resource.UpdateUser)
-	typedhttp.DELETE(router, "/users/{id}", resource.DeleteUser)
-	typedhttp.GET(router, "/users", resource.ListUsers)
+	typedhttp.GET(router, "/users/{id}", getUserHandler)
+	typedhttp.POST(router, "/users", createUserHandler)
+	typedhttp.PUT(router, "/users/{id}", updateUserHandler)
+	typedhttp.DELETE(router, "/users/{id}", deleteUserHandler)
+	typedhttp.GET(router, "/users", listUsersHandler)
 }
 
 // Example service implementation (in-memory for demonstration)
 type InMemoryUserService struct {
-	users   map[string]*User
-	nextID  int
+	users  map[string]*User
+	nextID int
 }
 
 func NewInMemoryUserService() *InMemoryUserService {
@@ -312,7 +366,7 @@ func (s *InMemoryUserService) DeleteUser(ctx context.Context, id string) error {
 
 func (s *InMemoryUserService) ListUsers(ctx context.Context, req ListUsersRequest) ([]User, PaginationMetadata, error) {
 	var allUsers []User
-	
+
 	// Convert map to slice and apply filters
 	for _, user := range s.users {
 		// Apply filters
@@ -323,8 +377,8 @@ func (s *InMemoryUserService) ListUsers(ctx context.Context, req ListUsersReques
 			continue
 		}
 		if req.Search != "" {
-			if !containsIgnoreCase(user.Name, req.Search) && 
-			   !containsIgnoreCase(user.Email, req.Search) {
+			if !containsIgnoreCase(user.Name, req.Search) &&
+				!containsIgnoreCase(user.Email, req.Search) {
 				continue
 			}
 		}

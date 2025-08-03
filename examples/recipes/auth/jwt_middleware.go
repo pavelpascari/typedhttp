@@ -245,8 +245,8 @@ func (h *GetProfileHandler) Handle(ctx context.Context, req GetProfileRequest) (
 // Mock user service for the example
 type UserService interface {
 	GetProfile(ctx context.Context, userID string) (*User, error)
+	ValidateCredentials(ctx context.Context, email string, password string) (*User, error)
 }
-
 type User struct {
 	ID    string
 	Email string
@@ -272,7 +272,7 @@ type UserInfo struct {
 }
 
 type LoginHandler struct {
-	userService UserService
+	userService   UserService
 	jwtMiddleware *JWTMiddleware
 }
 
@@ -299,10 +299,4 @@ func (h *LoginHandler) Handle(ctx context.Context, req LoginRequest) (LoginRespo
 			Role:  user.Role,
 		},
 	}, nil
-}
-
-// Add ValidateCredentials to UserService interface
-type ExtendedUserService interface {
-	UserService
-	ValidateCredentials(ctx context.Context, email, password string) (*User, error)
 }
