@@ -65,7 +65,7 @@ func registerProductResource(router *typedhttp.DomainRouter) {
 	// This would replace the entire product handlers package
 }
 
-// registerOrderResource would follow the same pattern  
+// registerOrderResource would follow the same pattern
 func registerOrderResource(router *typedhttp.DomainRouter) {
 	// TODO: Implement OrderService following the same pattern
 	// This would replace the entire order handlers package

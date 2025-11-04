@@ -79,7 +79,7 @@ type CreateUserHandler struct{}
 
 func (h *CreateUserHandler) Handle(ctx context.Context, req CreateUserRequest) (User, error) {
 	// Validation is automatic via struct tags!
-	
+
 	// Check for duplicate email
 	for _, user := range users {
 		if user.Email == req.Email {
@@ -107,7 +107,7 @@ func (m *AuthMiddleware) Before(ctx context.Context, req interface{}) (context.C
 	// Note: In a real implementation, you'd extract the token from the HTTP context
 	// This is simplified for demonstration
 	token := "Bearer valid-token" // Would extract from headers
-	
+
 	if token == "" {
 		return ctx, typedhttp.NewUnauthorizedError("missing authorization header")
 	}
@@ -133,7 +133,7 @@ func main() {
 		typedhttp.WithTags("users"),
 		typedhttp.WithSummary("List all users"),
 	)
-	
+
 	typedhttp.GET(router, "/users/{id}", getUserHandler,
 		typedhttp.WithTags("users"),
 		typedhttp.WithSummary("Get user by ID"),

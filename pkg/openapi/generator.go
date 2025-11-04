@@ -719,6 +719,7 @@ func (g *Generator) hasEnvelopeMiddleware(entries []typedhttp.MiddlewareEntry) b
 			return true
 		}
 	}
+
 	return false
 }
 

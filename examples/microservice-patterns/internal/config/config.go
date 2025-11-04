@@ -16,9 +16,9 @@ type ServiceConfig struct {
 
 // OpenAPIConfig represents OpenAPI generation configuration
 type OpenAPIConfig struct {
-	Title       string          `json:"title"`
-	Version     string          `json:"version"`
-	Description string          `json:"description"`
+	Title       string           `json:"title"`
+	Version     string           `json:"version"`
+	Description string           `json:"description"`
 	Servers     []openapi.Server `json:"servers"`
 }
 

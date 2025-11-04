@@ -82,6 +82,12 @@ ci:
 	@$(MAKE) test-coverage-check || (echo "❌ Coverage check failed" && exit 1)
 	@echo "✓ All CI checks passed"
 
+# SonarQube specific target
+sonar:
+	@echo "Running tests with coverage for SonarQube..."
+	@$(GOTEST) -v -race -coverprofile=coverage.out ./... || echo "⚠️  Some tests failed but coverage was generated"
+	@if [ -f coverage.out ]; then echo "✓ Coverage report generated for SonarQube"; else echo "❌ Coverage report not generated" && exit 1; fi
+
 # Clean targets
 clean:
 	$(GOCLEAN)

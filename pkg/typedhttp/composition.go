@@ -35,11 +35,12 @@ func NewComposableRouter(prefix string, middleware ...MiddlewareEntry) *Composab
 // This enables team-based development where different teams can work on separate routers.
 //
 // Example:
-//   app := NewComposableRouter("")
-//   userTeam := NewComposableRouter("/users")  // Team: Identity
-//   orderTeam := NewComposableRouter("/orders") // Team: Commerce
-//   
-//   app.Mount("/api/v1", userTeam, orderTeam)
+//
+//	app := NewComposableRouter("")
+//	userTeam := NewComposableRouter("/users")  // Team: Identity
+//	orderTeam := NewComposableRouter("/orders") // Team: Commerce
+//
+//	app.Mount("/api/v1", userTeam, orderTeam)
 func (r *ComposableRouter) Mount(prefix string, routers ...*ComposableRouter) {
 	for _, router := range routers {
 		mounted := &mountedRouter{
@@ -55,7 +56,8 @@ func (r *ComposableRouter) Mount(prefix string, routers ...*ComposableRouter) {
 // This is useful for applying common middleware (like authentication) to a group of services.
 //
 // Example:
-//   app.MountWithMiddleware("/admin", []MiddlewareEntry{adminAuth}, adminUserRouter, adminSystemRouter)
+//
+//	app.MountWithMiddleware("/admin", []MiddlewareEntry{adminAuth}, adminUserRouter, adminSystemRouter)
 func (r *ComposableRouter) MountWithMiddleware(prefix string, middleware []MiddlewareEntry, routers ...*ComposableRouter) {
 	for _, router := range routers {
 		mounted := &mountedRouter{
@@ -71,25 +73,28 @@ func (r *ComposableRouter) MountWithMiddleware(prefix string, middleware []Middl
 // This should be called after all mounting is complete.
 func (r *ComposableRouter) Finalize() *TypedRouter {
 	finalRouter := NewRouter()
-	
+
 	// Add handlers from this router
 	r.addHandlersToFinal(finalRouter, r.prefix, r.middleware)
-	
+
 	// Add handlers from all mounted sub-routers
 	for _, mounted := range r.subrouters {
 		mounted.router.addHandlersToFinal(finalRouter, mounted.prefix, mounted.middleware)
 	}
-	
+
 	return finalRouter
 }
 
 // addHandlersToFinal recursively adds handlers to the final router with proper prefixes and middleware.
 func (r *ComposableRouter) addHandlersToFinal(final *TypedRouter, pathPrefix string, inheritedMiddleware []MiddlewareEntry) {
 	// Add direct handlers from this router
-	for _, handler := range r.TypedRouter.handlers {
+	for i := range r.TypedRouter.handlers {
+		handler := &r.TypedRouter.handlers[i]
 		finalPath := r.combinePaths(pathPrefix, handler.Path)
-		finalMiddleware := append(inheritedMiddleware, handler.MiddlewareEntries...)
-		
+		finalMiddleware := make([]MiddlewareEntry, 0, len(inheritedMiddleware)+len(handler.MiddlewareEntries))
+		finalMiddleware = append(finalMiddleware, inheritedMiddleware...)
+		finalMiddleware = append(finalMiddleware, handler.MiddlewareEntries...)
+
 		// Create new handler registration with updated path and middleware
 		finalHandler := HandlerRegistration{
 			Method:            handler.Method,
@@ -100,9 +105,9 @@ func (r *ComposableRouter) addHandlersToFinal(final *TypedRouter, pathPrefix str
 			Config:            handler.Config,
 			MiddlewareEntries: finalMiddleware,
 		}
-		
+
 		final.handlers = append(final.handlers, finalHandler)
-		
+
 		// Register with HTTP mux using the final path
 		pattern := handler.Method + " " + finalPath
 		// Note: We need to re-create the HTTP handler with the new middleware
@@ -112,11 +117,13 @@ func (r *ComposableRouter) addHandlersToFinal(final *TypedRouter, pathPrefix str
 			http.Error(w, "Handler reconstruction needed", http.StatusNotImplemented)
 		})
 	}
-	
+
 	// Recursively add handlers from sub-routers
 	for _, mounted := range r.subrouters {
 		combinedPrefix := r.combinePaths(pathPrefix, mounted.prefix)
-		combinedMiddleware := append(inheritedMiddleware, mounted.middleware...)
+		combinedMiddleware := make([]MiddlewareEntry, 0, len(inheritedMiddleware)+len(mounted.middleware))
+		combinedMiddleware = append(combinedMiddleware, inheritedMiddleware...)
+		combinedMiddleware = append(combinedMiddleware, mounted.middleware...)
 		mounted.router.addHandlersToFinal(final, combinedPrefix, combinedMiddleware)
 	}
 }
@@ -130,7 +137,7 @@ func (r *ComposableRouter) GetAllHandlers() []HandlerRegistration {
 // getAllHandlersWithPrefix is a helper that collects handlers with the given prefix.
 func (r *ComposableRouter) getAllHandlersWithPrefix(pathPrefix string) []HandlerRegistration {
 	var allHandlers []HandlerRegistration
-	
+
 	// For direct handlers in this router, use the provided pathPrefix + this router's prefix
 	// But only if this router isn't mounted (pathPrefix is empty) or if we need to add our prefix
 	var currentPrefix string
@@ -141,15 +148,18 @@ func (r *ComposableRouter) getAllHandlersWithPrefix(pathPrefix string) []Handler
 		// This router is mounted, and pathPrefix already includes our prefix, so just use pathPrefix
 		currentPrefix = pathPrefix
 	}
-	
+
 	// Collect handlers from this router
-	for _, handler := range r.TypedRouter.handlers {
-		finalHandler := handler
+	for i := range r.TypedRouter.handlers {
+		handler := &r.TypedRouter.handlers[i]
+		finalHandler := *handler
 		finalHandler.Path = r.combinePaths(currentPrefix, handler.Path)
-		finalHandler.MiddlewareEntries = append(r.middleware, handler.MiddlewareEntries...)
+		finalHandler.MiddlewareEntries = make([]MiddlewareEntry, 0, len(r.middleware)+len(handler.MiddlewareEntries))
+		finalHandler.MiddlewareEntries = append(finalHandler.MiddlewareEntries, r.middleware...)
+		finalHandler.MiddlewareEntries = append(finalHandler.MiddlewareEntries, handler.MiddlewareEntries...)
 		allHandlers = append(allHandlers, finalHandler)
 	}
-	
+
 	// Recursively collect handlers from sub-routers
 	for _, mounted := range r.subrouters {
 		// For mounted routers, we need to combine the current pathPrefix with the mounted prefix
@@ -160,16 +170,19 @@ func (r *ComposableRouter) getAllHandlersWithPrefix(pathPrefix string) []Handler
 		} else {
 			fullMountedPrefix = r.combinePaths(pathPrefix, mounted.prefix)
 		}
-		
+
 		subHandlers := mounted.router.getAllHandlersWithPrefix(fullMountedPrefix)
-		for _, handler := range subHandlers {
-			finalHandler := handler
+		for i := range subHandlers {
+			handler := &subHandlers[i]
+			finalHandler := *handler
 			// Path is already calculated in the recursive call, just add middleware
-			finalHandler.MiddlewareEntries = append(mounted.middleware, handler.MiddlewareEntries...)
+			finalHandler.MiddlewareEntries = make([]MiddlewareEntry, 0, len(mounted.middleware)+len(handler.MiddlewareEntries))
+			finalHandler.MiddlewareEntries = append(finalHandler.MiddlewareEntries, mounted.middleware...)
+			finalHandler.MiddlewareEntries = append(finalHandler.MiddlewareEntries, handler.MiddlewareEntries...)
 			allHandlers = append(allHandlers, finalHandler)
 		}
 	}
-	
+
 	return allHandlers
 }
 
@@ -182,18 +195,18 @@ func (r *ComposableRouter) combinePaths(prefix, path string) string {
 	if path == "" {
 		return prefix
 	}
-	
+
 	// Ensure prefix starts with / but doesn't end with /
 	if !strings.HasPrefix(prefix, "/") {
 		prefix = "/" + prefix
 	}
 	prefix = strings.TrimSuffix(prefix, "/")
-	
+
 	// Ensure path starts with /
 	if !strings.HasPrefix(path, "/") {
 		path = "/" + path
 	}
-	
+
 	return prefix + path
 }
 
@@ -211,7 +224,7 @@ func TeamRouter(teamName, pathPrefix string, middleware ...MiddlewareEntry) *Com
 			},
 		},
 	}, middleware...)
-	
+
 	return NewComposableRouter(pathPrefix, teamMiddleware...)
 }
 
@@ -260,7 +273,7 @@ func (dc *DomainComposition) Compose(apiPrefix string) *TypedRouter {
 	for _, router := range dc.domains {
 		routers = append(routers, router)
 	}
-	
+
 	dc.app.Mount(apiPrefix, routers...)
 	return dc.app.Finalize()
 }
