@@ -429,7 +429,7 @@ func TestHTTPIntegration_PublicAPI(t *testing.T) {
 	assert.NotNil(t, router)
 	assert.Len(t, middleware, 4)
 	assert.Greater(t, len(handlers), 0)
-	
+
 	// Verify the handler is registered
 	found := false
 	for _, handler := range handlers {

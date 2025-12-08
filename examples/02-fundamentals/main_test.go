@@ -253,7 +253,7 @@ func TestDeleteUserHandler(t *testing.T) {
 // Benchmark tests
 func BenchmarkUserStore_Get(b *testing.B) {
 	store := NewUserStore()
-	
+
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		_, _ = store.Get("1")

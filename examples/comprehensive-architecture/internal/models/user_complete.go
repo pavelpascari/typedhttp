@@ -3,7 +3,7 @@ package models
 // UpdateUserRequest represents the request to update a user
 type UpdateUserRequest struct {
 	ID string `path:"id" validate:"required,uuid"`
-	
+
 	//openapi:description=User's full name,example=John Doe
 	Name string `json:"name,omitempty" validate:"omitempty,min=2,max=50"`
 

@@ -20,7 +20,7 @@ type SimpleUser struct {
 	Name string `json:"name" validate:"required,min=2,max=50"`
 }
 
-// Medium complexity types (Level 2: Real-world operations)  
+// Medium complexity types (Level 2: Real-world operations)
 type UserProfile struct {
 	ID       string   `json:"id" path:"id" validate:"required"`
 	Name     string   `json:"name" validate:"required,min=2,max=50"`
@@ -28,8 +28,8 @@ type UserProfile struct {
 	Age      int      `json:"age" validate:"min=18,max=120"`
 	Tags     []string `json:"tags" validate:"dive,required,min=1"`
 	Settings struct {
-		Theme       string `json:"theme" validate:"oneof=light dark"`
-		Language    string `json:"language" validate:"required,min=2,max=5"`
+		Theme       string                 `json:"theme" validate:"oneof=light dark"`
+		Language    string                 `json:"language" validate:"required,min=2,max=5"`
 		Preferences map[string]interface{} `json:"preferences"`
 	} `json:"settings"`
 }
@@ -182,7 +182,7 @@ func generateXLargePayload() []byte {
 			Name:    generateTeamName(teamIdx),
 			Members: make([]UserProfile, 0, 10),
 		}
-		
+
 		for memberIdx := 0; memberIdx < 10; memberIdx++ {
 			member := UserProfile{
 				ID:    generateMemberID(teamIdx, memberIdx),
@@ -246,17 +246,22 @@ func generateMemberEmail(teamIdx, memberIdx int) string {
 
 // TypedHTTP handlers for enhanced benchmarks
 type SimpleGetHandler struct{}
-func (h *SimpleGetHandler) Handle(ctx context.Context, req struct{ ID string `path:"id"` }) (SimpleUser, error) {
+
+func (h *SimpleGetHandler) Handle(ctx context.Context, req struct {
+	ID string `path:"id"`
+}) (SimpleUser, error) {
 	return SimpleUser{ID: req.ID, Name: "Test User"}, nil
 }
 
 type MediumPostHandler struct{}
+
 func (h *MediumPostHandler) Handle(ctx context.Context, req UserProfile) (UserProfile, error) {
 	req.ID = "generated_id"
 	return req, nil
 }
 
 type ComplexPostHandler struct{}
+
 func (h *ComplexPostHandler) Handle(ctx context.Context, req EnterpriseResource) (EnterpriseResource, error) {
 	req.ID = "generated_complex_id"
 	return req, nil
@@ -481,12 +486,12 @@ func BenchmarkGin_XLarge_POST_100KB(b *testing.B) {
 // Payload size information
 func BenchmarkPayloadSizes(b *testing.B) {
 	b.Skip("This is just for documentation")
-	
+
 	small := generateSmallPayload()
 	medium := generateMediumPayload()
 	large := generateLargePayload()
 	xlarge := generateXLargePayload()
-	
+
 	b.Logf("Small payload size: %d bytes", len(small))
 	b.Logf("Medium payload size: %d bytes", len(medium))
 	b.Logf("Large payload size: %d bytes", len(large))

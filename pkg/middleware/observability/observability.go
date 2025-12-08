@@ -9,14 +9,22 @@ import (
 	"time"
 )
 
+// Context key type for observability
+type contextKey string
+
+const (
+	startTimeKey        contextKey = "start_time"
+	metricsStartTimeKey contextKey = "metrics_start_time"
+)
+
 // LoggingConfig holds logging middleware configuration
 type LoggingConfig struct {
-	LogRequests       bool
-	LogResponses      bool
-	LogRequestBody    bool
-	LogResponseBody   bool
-	Level             slog.Level
-	Fields            map[string]interface{}
+	LogRequests     bool
+	LogResponses    bool
+	LogRequestBody  bool
+	LogResponseBody bool
+	Level           slog.Level
+	Fields          map[string]interface{}
 }
 
 // LoggingMiddleware provides structured logging for HTTP requests and typed operations
@@ -162,13 +170,13 @@ func (m *LoggingMiddleware) Before(ctx context.Context, req interface{}) (contex
 	}
 
 	// Add start time to context for duration calculation
-	return context.WithValue(ctx, "start_time", time.Now()), nil
+	return context.WithValue(ctx, startTimeKey, time.Now()), nil
 }
 
 // After implements TypedPostMiddleware interface
 func (m *LoggingMiddleware) After(ctx context.Context, req interface{}, resp interface{}, err error) (interface{}, error) {
 	if m.config.LogResponses {
-		startTime, _ := ctx.Value("start_time").(time.Time)
+		startTime, _ := ctx.Value(startTimeKey).(time.Time)
 		duration := time.Since(startTime)
 
 		fields := []interface{}{
@@ -235,12 +243,12 @@ type MetricsConfig struct {
 
 // MetricsData holds collected metrics
 type MetricsData struct {
-	RequestCount        int64
-	TypedRequestCount   int64
-	TotalDuration       time.Duration
-	TotalTypedDuration  time.Duration
-	ResponseCodes       map[int]int64
-	mu                  sync.RWMutex
+	RequestCount       int64
+	TypedRequestCount  int64
+	TotalDuration      time.Duration
+	TotalTypedDuration time.Duration
+	ResponseCodes      map[int]int64
+	mu                 sync.RWMutex
 }
 
 // MetricsMiddleware provides metrics collection for HTTP requests and typed operations
@@ -343,12 +351,12 @@ func (m *MetricsMiddleware) HTTPMiddleware() func(http.Handler) http.Handler {
 // Before implements TypedPreMiddleware interface
 func (m *MetricsMiddleware) Before(ctx context.Context, req interface{}) (context.Context, error) {
 	// Add start time to context for duration calculation
-	return context.WithValue(ctx, "metrics_start_time", time.Now()), nil
+	return context.WithValue(ctx, metricsStartTimeKey, time.Now()), nil
 }
 
 // After implements TypedPostMiddleware interface
 func (m *MetricsMiddleware) After(ctx context.Context, req interface{}, resp interface{}, err error) (interface{}, error) {
-	startTime, _ := ctx.Value("metrics_start_time").(time.Time)
+	startTime, _ := ctx.Value(metricsStartTimeKey).(time.Time)
 	duration := time.Since(startTime)
 	m.recordTypedMetrics(duration)
 
@@ -376,12 +384,12 @@ func (m *MetricsMiddleware) recordTypedMetrics(duration time.Duration) {
 
 // TracingConfig holds tracing middleware configuration
 type TracingConfig struct {
-	ServiceName        string
-	TraceRequests      bool
-	TraceResponses     bool
-	TraceRequestBody   bool
-	TraceResponseBody  bool
-	Attributes         map[string]interface{}
+	ServiceName       string
+	TraceRequests     bool
+	TraceResponses    bool
+	TraceRequestBody  bool
+	TraceResponseBody bool
+	Attributes        map[string]interface{}
 }
 
 // Span represents a simple tracing span

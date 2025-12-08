@@ -26,7 +26,7 @@ func getGlobalValidator() *validator.Validate {
 func getOptimalDecoder[T any]() RequestDecoder[T] {
 	var result T
 	resultType := reflect.TypeOf(result)
-	
+
 	// Handle case where T is interface{} or similar
 	if resultType == nil || resultType.Kind() != reflect.Struct {
 		return NewCombinedDecoder[T](getGlobalValidator())
@@ -41,7 +41,7 @@ func getOptimalDecoder[T any]() RequestDecoder[T] {
 
 	for i := 0; i < resultType.NumField(); i++ {
 		field := resultType.Field(i)
-		
+
 		if !field.IsExported() {
 			continue
 		}
@@ -71,7 +71,7 @@ func getOptimalDecoder[T any]() RequestDecoder[T] {
 		// Path-only requests (like GET /users/{id})
 		return NewPathDecoder[T](getGlobalValidator())
 	}
-	
+
 	if hasJSONTags && !hasPathTags && !hasQueryTags && !hasHeaderTags && !hasCookieTags && !hasFormTags {
 		// JSON-only requests (like simple POST with JSON body)
 		return NewJSONDecoder[T](getGlobalValidator())
@@ -104,15 +104,15 @@ type HandlerRegistration struct {
 
 // HTTPHandler wraps a typed handler with HTTP-specific functionality.
 type HTTPHandler[TRequest, TResponse any] struct {
-	handler        Handler[TRequest, TResponse]
-	decoder        RequestDecoder[TRequest]
-	encoder        ResponseEncoder[TResponse]
-	errorMapper    ErrorMapper
-	middleware     []Middleware
-	metadata       OpenAPIMetadata
-	config         ObservabilityConfig
-	cachedDecoder  RequestDecoder[TRequest]  // Cached decoder to avoid per-request creation
-	cachedEncoder  ResponseEncoder[TResponse] // Cached encoder to avoid per-request creation
+	handler       Handler[TRequest, TResponse]
+	decoder       RequestDecoder[TRequest]
+	encoder       ResponseEncoder[TResponse]
+	errorMapper   ErrorMapper
+	middleware    []Middleware
+	metadata      OpenAPIMetadata
+	config        ObservabilityConfig
+	cachedDecoder RequestDecoder[TRequest]   // Cached decoder to avoid per-request creation
+	cachedEncoder ResponseEncoder[TResponse] // Cached encoder to avoid per-request creation
 }
 
 // ServeHTTP implements http.Handler for the typed handler.
